@@ -11,7 +11,7 @@ class Client():
         self.conn = rpc.connect(address, port)
         
         print("Available Rooms:", self.get_available_rooms())
-        print(self.conn.exposed_getServerInfo())
+        print(self.conn.root.exposed_getServerInfo())
 
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
