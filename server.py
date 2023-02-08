@@ -19,6 +19,15 @@ class Chatroom:
     def newMessage(self, user, message):
         self.messages.append((user, message))
 
+    def get_messages(self, number):
+        if number == -1:
+            return self.messages
+
+        if len(self.messages) <= number:
+            return self.messages
+            
+        return self.messages[-number:]
+
 class Server(rpc.Service):
     chatrooms = []
 
@@ -55,6 +64,13 @@ class Server(rpc.Service):
             return True
         else:
             return False
+
+    def exposed_getMessages(self, user, roomName, number = 10):
+        room = self.getRoom(roomName)
+        if room and user in room.participants:
+            return room.get_messages(number)
+        else:
+            return None
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")

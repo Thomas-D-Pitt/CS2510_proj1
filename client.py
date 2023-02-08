@@ -1,4 +1,4 @@
-import sys, argparse
+import sys, argparse, os
 import rpyc as rpc
 
 class Client():
@@ -12,6 +12,13 @@ class Client():
         self.join_room("test")
         print(self.get_available_rooms())
         self.send_message("hello world")
+        self.send_message("hello world2")
+        self.send_message("hello world3")
+
+        print(self.get_messages())
+
+        os.system('cls')
+
 
     def join_room(self, room):
         if self.conn.root.exposed_join(self.name, room):
@@ -30,6 +37,9 @@ class Client():
         else:
             print("Error sending message")
             return False
+
+    def get_messages(self):
+        return self.conn.root.exposed_getMessages(self.name, self.room)
 
     def input_loop(self):
         pass
