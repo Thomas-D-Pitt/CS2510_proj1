@@ -12,7 +12,6 @@ class Client():
         self.conn = rpc.connect(address, port)
         
         print("Available Rooms:", self.get_available_rooms())
-        print(self.conn.root.exposed_getServerInfo())
 
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
@@ -81,7 +80,7 @@ class Client():
 
             newContent = self.get_messages()
             newChatters = self.get_chatters(self.room)
-            if newContent == self.lastContent or newChatters == self.lastChatters:
+            if newContent == self.lastContent and newChatters == self.lastChatters:
                 sleep(1/rate)
                 continue
             
