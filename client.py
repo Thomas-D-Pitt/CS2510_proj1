@@ -19,6 +19,12 @@ class Client():
         input_thread = Thread(target=self.input_loop) 
         input_thread.start()
 
+    def set_name(self, name):
+        if self.room == None:
+            self.name = name
+        else:
+            self.conn.root.exposed_leave(self.name, self.room)
+            self.name = name
 
     def join_room(self, room):
         if self.conn.root.exposed_join(self.name, room):
@@ -38,6 +44,9 @@ class Client():
             print("Error sending message")
             return False
 
+    def get_chatters(self):
+        return self.conn.root.exposed_getChatters(self.room)
+
     def get_messages(self):
         return self.conn.root.exposed_getMessages(self.name, self.room)
 
@@ -50,12 +59,16 @@ class Client():
                 self.send_message(cmd[1])
 
             elif cmd[0] == "u":
-                self.name = cmd[1]
+                self.set_name(cmd[1])
                 print(F"Username set to {cmd[1]}")
 
             elif cmd[0] == "j":
                 if self.join_room(cmd[1]):
                     print(F"joined {cmd[1]}")
+
+            elif cmd[0] == "q":
+                self.conn.root.exposed_leave(self.name, self.room)
+                sys.exit()
 
             else:
                 print(F"Unknown command: {cmd[0]}")
@@ -72,9 +85,9 @@ class Client():
             
             #os.system('clear')
             count = 0
-            print(F"in chatroom: {self.room} as {self.name}")
+            print(F"Group: {self.room} \nParticipants:{self.get_chatters(self.room)}")
             for sender, msg in newContent:
-                print(F"{count}) {sender}: {msg}")
+                print(F"{count}. {sender}: {msg}")
                 count += 1
             self.lastContent = newContent[-10:]
             sleep(1/rate)

@@ -16,7 +16,7 @@ class Chatroom:
         return True
 
     def remove_chatter(self, username):
-        self.participants.remove(username)
+        return self.participants.remove(username)
 
     def newMessage(self, user, message):
         self.messages.append((user, message))
@@ -61,6 +61,16 @@ class Server():
         newRoom.add_chatter(user)
         return True
 
+    def leave(self, user, roomName):
+        if user == None:
+            return False
+
+        room = self.getRoom(roomName)
+        if room:
+            return room.remove_chatter(user)
+
+        return False
+
     def availableRooms(self):
         return [room.name for room in self.chatrooms]
 
@@ -76,6 +86,13 @@ class Server():
         room = self.getRoom(roomName)
         if room and user in room.participants:
             return room.get_messages(number)
+        else:
+            return None
+
+    def getChatters(self, roomName):
+        room = self.getRoom(roomName)
+        if room:
+            return room.participants
         else:
             return None
 
@@ -97,6 +114,10 @@ class Connection(rpc.Service):
         global SERVER
         return SERVER.getMessages(*args, **kwargs)
 
+    def exposed_getChatters(self, *args, **kwargs):
+        global SERVER
+        return SERVER.getChatters(*args, **kwargs)
+
     def exposed_newMessage(self, *args, **kwargs):
         global SERVER
         return SERVER.newMessage(*args, **kwargs)
@@ -108,6 +129,10 @@ class Connection(rpc.Service):
     def exposed_join(self, *args, **kwargs):
         global SERVER
         return SERVER.join(*args, **kwargs)
+
+    def exposed_leave(self, *args, **kwargs):
+        global SERVER
+        return SERVER.leave(*args, **kwargs)
 
     def exposed_getServerInfo(self):
         global SERVER
