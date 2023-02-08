@@ -6,6 +6,7 @@ import rpyc as rpc
 class Client():
     name = None
     room = None
+    lastContent = None
     def __init__(self, address, port):
         self.conn = rpc.connect(address, port)
 
@@ -48,9 +49,16 @@ class Client():
         while True:
             count += 1
             self.send_message(F"hello world{count}")
+
+            newContent = self.get_messages()
+            if newContent == lastContent:
+                return
+            
             os.system('clear')
-            print(self.get_messages())
-            sleep(.1)
+            for sender, msg in newContent:
+                print(F"{sender}: {msg}")
+            lastContent = newContent[-10:]
+            sleep(1)
         
 
 def get_args(argv):
