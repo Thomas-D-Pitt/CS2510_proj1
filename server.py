@@ -35,7 +35,7 @@ class Server():
 
     def __init__(self):
         receive_thread = Thread(target=self.update_loop) 
-        receive_thread.start()
+        #receive_thread.start()
 
     def getRoom(self, roomName):
         if roomName == None: return None
