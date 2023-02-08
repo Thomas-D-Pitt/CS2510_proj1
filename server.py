@@ -18,7 +18,6 @@ class Chatroom:
 
     def newMessage(self, user, message):
         self.messages.append((user, message))
-        print("new message")
 
     def get_messages(self, number):
         if number == -1:

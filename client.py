@@ -65,7 +65,6 @@ class Client():
 
             newContent = self.get_messages()
             if newContent == self.lastContent:
-                print(F"no change: {newContent}")
                 sleep(1/rate)
                 continue
             
