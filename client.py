@@ -19,6 +19,9 @@ class Client():
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
 
+        input_thread = Thread(target=self.input_loop) 
+        input_thread.start()
+
 
     def join_room(self, room):
         if self.conn.root.exposed_join(self.name, room):
@@ -42,23 +45,27 @@ class Client():
         return self.conn.root.exposed_getMessages(self.name, self.room)
 
     def input_loop(self):
-        pass
+        while True:
+            cmd = input(" >").split(" ", 1)
+            
+            if cmd[0] == "a":
+                self.send_message(cmd[1])
 
     def update_loop(self):
-        count = 0
+        
         while True:
-            count += 1
-            self.send_message(F"hello world{count}")
 
             newContent = self.get_messages()
             if newContent == self.lastContent:
                 return
             
             os.system('clear')
+            count = 0
             for sender, msg in newContent:
-                print(F"{sender}: {msg}")
+                print(F"{count}) {sender}: {msg}")
+                count += 1
             self.lastContent = newContent[-10:]
-            sleep(1)
+            sleep(.05)
         
 
 def get_args(argv):
