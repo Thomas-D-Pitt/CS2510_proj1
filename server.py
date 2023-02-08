@@ -35,7 +35,7 @@ class Server():
 
     def __init__(self):
         receive_thread = Thread(target=self.update_loop) 
-        #receive_thread.start()
+        receive_thread.start()
 
     def getRoom(self, roomName):
         if roomName == None: return None
@@ -93,16 +93,16 @@ class Server():
 
 class Connection(rpc.Service):
     def exposed_getMessages(self, *args, **kwargs):
-        SERVER.getMessages(*args, **kwargs)
+        return SERVER.getMessages(*args, **kwargs)
 
     def exposed_newMessage(self, *args, **kwargs):
-        SERVER.newMessage(*args, **kwargs)
+        return SERVER.newMessage(*args, **kwargs)
 
     def exposed_availableRooms(self, *args, **kwargs):
-        SERVER.availableRooms(*args, **kwargs)
+        return SERVER.availableRooms(*args, **kwargs)
 
     def exposed_join(self, *args, **kwargs):
-        SERVER.join(*args, **kwargs)
+        return SERVER.join(*args, **kwargs)
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
