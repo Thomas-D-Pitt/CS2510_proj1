@@ -59,12 +59,14 @@ class Client():
                 print(F"Unknown command: {cmd[0]}")
 
     def update_loop(self):
+        rate = .5
         os.system('clear')
         while True:
 
             newContent = self.get_messages()
             if newContent == self.lastContent:
                 print(F"no change: {newContent}")
+                sleep(1/rate)
                 continue
             
             os.system('clear')
@@ -73,7 +75,7 @@ class Client():
                 print(F"{count}) {sender}: {msg}")
                 count += 1
             self.lastContent = newContent[-10:]
-            sleep(3.05)
+            sleep(1/rate)
         
 
 def get_args(argv):
