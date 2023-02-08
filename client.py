@@ -70,6 +70,7 @@ class Client():
             
             os.system('clear')
             count = 0
+            print(F"in chatroom: {self.room} as {self.name}")
             for sender, msg in newContent:
                 print(F"{count}) {sender}: {msg}")
                 count += 1

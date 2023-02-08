@@ -31,6 +31,10 @@ class Chatroom:
 class Server(rpc.Service):
     chatrooms = []
 
+    def __init__(self):
+        receive_thread = Thread(target=self.update_loop) 
+        receive_thread.start()
+
     def getRoom(self, roomName):
         if roomName == None: return None
 
@@ -71,6 +75,20 @@ class Server(rpc.Service):
             return room.get_messages(number)
         else:
             return None
+
+
+    def update_loop(self):
+        rate = .5
+        os.system('clear')
+        while True:
+            os.system('clear')
+            print(F"Active rooms:")
+            count = 1
+            for room in self.chatrooms:
+                print(F"Room {count}: {room.name}, {len(room.participants)} active users")
+                count += 1
+            self.lastContent = newContent[-10:]
+            sleep(1/rate)
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
