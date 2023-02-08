@@ -29,7 +29,7 @@ class Chatroom:
 
         return self.messages[-number:]
 
-class Server(rpc.Service):
+class Server():
     chatrooms = []
 
     def __init__(self):
@@ -91,6 +91,11 @@ class Server(rpc.Service):
             self.lastContent = newContent[-10:]
             sleep(1/rate)
 
+class Connection(rpc.Service):
+    def __getattribute__(name):
+        print("do threading")
+        SERVER.__getattribute__(name)
+
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
     parser.add_argument('-p', '--port', required=False, default=12000, type=int)
@@ -99,5 +104,6 @@ def get_args(argv):
 if __name__ == '__main__':
     print("Chat Server")
     args = get_args(sys.argv[1:])
-    server = ForkingServer(Server, port = args.port)
-    server.start()
+    SERVER = Server()
+    connectionHandler = ForkingServer(Connection, port = args.port)
+    connectionHandler.start()
