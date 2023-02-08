@@ -46,7 +46,7 @@ class Server():
 
         return None
 
-    def exposed_join(self, user, roomName):
+    def join(self, user, roomName):
         if user == None:
             return False
 
@@ -60,10 +60,10 @@ class Server():
         newRoom.add_chatter(user)
         return True
 
-    def exposed_availableRooms(self):
+    def availableRooms(self):
         return [room.name for room in self.chatrooms]
 
-    def exposed_newMessage(self, user, roomName, message):
+    def newMessage(self, user, roomName, message):
         room = self.getRoom(roomName)
         if room and user in room.participants:
             room.newMessage(user, message)
@@ -71,7 +71,7 @@ class Server():
         else:
             return False
 
-    def exposed_getMessages(self, user, roomName, number = 10):
+    def getMessages(self, user, roomName, number = 10):
         room = self.getRoom(roomName)
         if room and user in room.participants:
             return room.get_messages(number)
@@ -92,12 +92,17 @@ class Server():
             sleep(1/rate)
 
 class Connection(rpc.Service):
-    def __getattribute__(self, name):
-        try:
-            super().__getattribute__(name)
-        except:
-            print("do threading")
-            SERVER.__getattribute__(name)
+    def exposed_getMessages(self, *args, **kwargs):
+        SERVER.getMessages(*args, **kwargs)
+
+    def exposed_newMessage(self, *args, **kwargs):
+        SERVER.newMessage(*args, **kwargs)
+
+    def exposed_availableRooms(self, *args, **kwargs):
+        SERVER.availableRooms(*args, **kwargs)
+
+    def exposed_join(self, *args, **kwargs):
+        SERVER.join(*args, **kwargs)
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
