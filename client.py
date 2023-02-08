@@ -64,6 +64,7 @@ class Client():
 
             newContent = self.get_messages()
             if newContent == self.lastContent:
+                print(F"no change: {newContent}")
                 return
             
             os.system('clear')
@@ -72,7 +73,7 @@ class Client():
                 print(F"{count}) {sender}: {msg}")
                 count += 1
             self.lastContent = newContent[-10:]
-            sleep(.05)
+            sleep(3.05)
         
 
 def get_args(argv):

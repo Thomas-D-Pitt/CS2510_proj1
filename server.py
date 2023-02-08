@@ -18,6 +18,7 @@ class Chatroom:
 
     def newMessage(self, user, message):
         self.messages.append((user, message))
+        print("new message")
 
     def get_messages(self, number):
         if number == -1:
@@ -25,7 +26,7 @@ class Chatroom:
 
         if len(self.messages) <= number:
             return self.messages
-            
+
         return self.messages[-number:]
 
 class Server(rpc.Service):
