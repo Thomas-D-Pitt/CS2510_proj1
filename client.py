@@ -15,7 +15,7 @@ class Client():
         print("Available Rooms:", self.get_available_rooms())
         self.send_message("hello world")
         
-        receive_thread = threading.Thread(target=self.update_loop) 
+        receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
 
 
