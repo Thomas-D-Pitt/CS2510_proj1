@@ -11,7 +11,6 @@ class Client():
         self.conn = rpc.connect(address, port)
 
         print("Available Rooms:", self.get_available_rooms())
-        self.send_message("hello world")
         
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
@@ -50,12 +49,17 @@ class Client():
 
             elif cmd[0] == "u":
                 self.name = cmd[1]
+                print(F"Username set to {cmd[1]}")
 
             elif cmd[0] == "j":
-                self.join_room(cmd[1])
+                if self.join_room(cmd[1]):
+                    print(F"joined {cmd[1]}")
+
+            else:
+                print(F"Unknown command: {cmd[0]}")
 
     def update_loop(self):
-        
+        os.system('clear')
         while True:
 
             newContent = self.get_messages()
