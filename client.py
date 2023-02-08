@@ -51,13 +51,13 @@ class Client():
             self.send_message(F"hello world{count}")
 
             newContent = self.get_messages()
-            if newContent == lastContent:
+            if newContent == self.lastContent:
                 return
             
             os.system('clear')
             for sender, msg in newContent:
                 print(F"{sender}: {msg}")
-            lastContent = newContent[-10:]
+            self.lastContent = newContent[-10:]
             sleep(1)
         
 
