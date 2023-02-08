@@ -1,4 +1,4 @@
-import sys, argparse, os
+import sys, argparse, os, random
 import rpyc as rpc
 from threading import Thread
 from time import sleep
@@ -34,6 +34,7 @@ class Server():
     chatrooms = []
 
     def __init__(self):
+        self. id = random.randint(1, 100000)
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
 
@@ -103,6 +104,9 @@ class Connection(rpc.Service):
 
     def exposed_join(self, *args, **kwargs):
         return SERVER.join(*args, **kwargs)
+
+    def exposed_getServerInfo(self):
+        return str(server), 
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")

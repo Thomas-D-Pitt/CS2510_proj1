@@ -41,6 +41,7 @@ class Client():
         return self.conn.root.exposed_getMessages(self.name, self.room)
 
     def input_loop(self):
+        sleep(.1)
         while True:
             cmd = input(" >").split(" ", 1)
             
