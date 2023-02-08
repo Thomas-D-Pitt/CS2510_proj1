@@ -65,7 +65,7 @@ class Client():
             newContent = self.get_messages()
             if newContent == self.lastContent:
                 print(F"no change: {newContent}")
-                return
+                continue
             
             os.system('clear')
             count = 0
