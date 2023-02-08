@@ -1,4 +1,6 @@
 import sys, argparse, os
+from threading import Thread
+from time import sleep
 import rpyc as rpc
 
 class Client():
@@ -10,14 +12,11 @@ class Client():
 
         self.name = "tom"
         self.join_room("test")
-        print(self.get_available_rooms())
+        print("Available Rooms:", self.get_available_rooms())
         self.send_message("hello world")
-        self.send_message("hello world2")
-        self.send_message("hello world3")
-
-        print(self.get_messages())
-
-        os.system('cls')
+        
+        receive_thread = threading.Thread(target=self.update_loop) 
+        receive_thread.start()
 
 
     def join_room(self, room):
@@ -43,6 +42,16 @@ class Client():
 
     def input_loop(self):
         pass
+
+    def update_loop(self):
+        count = 0
+        while True:
+            count += 1
+            self.send_message(F"hello world{count}")
+            os.system('clear')
+            print(self.get_messages())
+            sleep(.1)
+        
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat client")
