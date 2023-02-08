@@ -25,8 +25,8 @@ class Server(rpc.Service):
 
         self.chatrooms.append(Chatroom(roomName))
 
-    def exposed_value(self):
-        return self.value
+    def exposed_availableRooms(self):
+        return [room.name for room in self.chatrooms]
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
@@ -34,7 +34,7 @@ def get_args(argv):
     return parser.parse_args()
 
 if __name__ == '__main__':
+    print("Chat Server")
     args = get_args(sys.argv[1:])
-
     server = ForkingServer(Server, port = args.port)
     server.start()

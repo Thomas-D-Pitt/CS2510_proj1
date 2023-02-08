@@ -4,14 +4,13 @@ import rpyc as rpc
 class Client():
     def __init__(self, address, port):
         conn = rpc.connect(address, port)
-        conn.root.exposed_append(2)
-        conn.root.exposed_append(4)
-        print(conn.root.exposed_value())
+        conn.root.exposed_join("test room")
+        print(conn.root.exposed_availableRooms())
 
         self.conn = conn
 
     def input_loop(self):
-        
+        pass
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat client")
