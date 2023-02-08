@@ -3,13 +3,33 @@ import rpyc as rpc
 
 class Client():
     name = None
+    room = None
     def __init__(self, address, port):
-        self.name = "tom"
-        conn = rpc.connect(address, port)
-        conn.root.exposed_join(self.name, "test room")
-        print(conn.root.exposed_availableRooms())
+        self.conn = rpc.connect(address, port)
 
-        self.conn = conn
+
+        self.name = "tom"
+        self.join_room("test")
+        print(self.get_available_rooms())
+        self.send_message("hello world")
+
+    def join_room(self, room):
+        if self.conn.root.exposed_join(self.name, room):
+            self.room = room
+            return True
+        else:
+            print("Error joining room")
+            return False
+
+    def get_available_rooms(self):
+        return self.conn.root.exposed_availableRooms()
+
+    def send_message(self, message):
+        if self.conn.root.exposed_newMessage(self.name, self.room, message):
+            return True
+        else:
+            print("Error sending message")
+            return False
 
     def input_loop(self):
         pass
