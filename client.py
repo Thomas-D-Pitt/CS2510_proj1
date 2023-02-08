@@ -7,6 +7,7 @@ class Client():
     name = None
     room = None
     lastContent = None
+    lastChatters = None
     def __init__(self, address, port):
         self.conn = rpc.connect(address, port)
         
@@ -79,17 +80,19 @@ class Client():
         while True:
 
             newContent = self.get_messages()
-            if newContent == self.lastContent:
+            newChatters = self.get_chatters(self.room)
+            if newContent == self.lastContent or newChatters == self.lastChatters:
                 sleep(1/rate)
                 continue
             
             #os.system('clear')
             count = 0
-            print(F"Group: {self.room} \nParticipants:{self.get_chatters(self.room)}")
+            print(F"Group: {self.room} \nParticipants:{newChatters}")
             for sender, msg in newContent:
                 print(F"{count}. {sender}: {msg}")
                 count += 1
             self.lastContent = newContent[-10:]
+            self.lastChatters = newChatters
             sleep(1/rate)
         
 
