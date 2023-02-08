@@ -2,9 +2,11 @@ import sys, argparse
 import rpyc as rpc
 
 class Client():
+    name = None
     def __init__(self, address, port):
+        self.name = "tom"
         conn = rpc.connect(address, port)
-        conn.root.exposed_join("test room")
+        conn.root.exposed_join(self.name, "test room")
         print(conn.root.exposed_availableRooms())
 
         self.conn = conn
