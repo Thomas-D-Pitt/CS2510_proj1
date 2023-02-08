@@ -62,7 +62,7 @@ class Client():
 
     def update_loop(self):
         rate = .5
-        os.system('clear')
+        #os.system('clear')
         while True:
 
             newContent = self.get_messages()
@@ -70,7 +70,7 @@ class Client():
                 sleep(1/rate)
                 continue
             
-            os.system('clear')
+            #os.system('clear')
             count = 0
             print(F"in chatroom: {self.room} as {self.name}")
             for sender, msg in newContent:
