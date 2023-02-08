@@ -88,11 +88,10 @@ class Server():
             for room in self.chatrooms:
                 print(F"Room {count}: {room.name}, {len(room.participants)} active users")
                 count += 1
-            self.lastContent = newContent[-10:]
             sleep(1/rate)
 
 class Connection(rpc.Service):
-    def __getattribute__(name):
+    def __getattribute__(self, name):
         print("do threading")
         SERVER.__getattribute__(name)
 
