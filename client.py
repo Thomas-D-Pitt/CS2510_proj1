@@ -10,9 +10,6 @@ class Client():
     def __init__(self, address, port):
         self.conn = rpc.connect(address, port)
 
-
-        self.name = "tom"
-        self.join_room("test")
         print("Available Rooms:", self.get_available_rooms())
         self.send_message("hello world")
         
@@ -50,6 +47,12 @@ class Client():
             
             if cmd[0] == "a":
                 self.send_message(cmd[1])
+
+            elif cmd[0] == "u":
+                self.name = cmd[1]
+
+            elif cmd[0] == "j":
+                self.join_room(cmd[1])
 
     def update_loop(self):
         
