@@ -9,8 +9,9 @@ class Client():
     lastContent = None
     def __init__(self, address, port):
         self.conn = rpc.connect(address, port)
-        print(self.conn.exposed_getServerInfo)
+        
         print("Available Rooms:", self.get_available_rooms())
+        print(self.conn.exposed_getServerInfo)
         
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
