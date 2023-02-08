@@ -44,8 +44,8 @@ class Client():
             print("Error sending message")
             return False
 
-    def get_chatters(self):
-        return self.conn.root.exposed_getChatters(self.room)
+    def get_chatters(self, room):
+        return self.conn.root.exposed_getChatters(room)
 
     def get_messages(self):
         return self.conn.root.exposed_getMessages(self.name, self.room)
