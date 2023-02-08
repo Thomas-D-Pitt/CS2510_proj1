@@ -1,6 +1,7 @@
 import sys, argparse, os
 import rpyc as rpc
 from threading import Thread
+from time import sleep
 from rpyc.utils.server import ForkingServer
 
 class Chatroom:
@@ -92,8 +93,11 @@ class Server():
 
 class Connection(rpc.Service):
     def __getattribute__(self, name):
-        print("do threading")
-        SERVER.__getattribute__(name)
+        try:
+            super().__getattribute__(name)
+        except:
+            print("do threading")
+            SERVER.__getattribute__(name)
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
