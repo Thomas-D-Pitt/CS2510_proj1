@@ -2,7 +2,7 @@ import sys, argparse, os, random
 import rpyc as rpc
 from threading import Thread
 from time import sleep
-from rpyc.utils.server import ForkingServer
+from rpyc.utils.server import ThreadedServer
 
 class Chatroom:
     participants = []
@@ -123,5 +123,5 @@ if __name__ == '__main__':
     print("Chat Server")
     args = get_args(sys.argv[1:])
     SERVER = Server()
-    connectionHandler = ForkingServer(Connection, port = args.port)
+    connectionHandler = ThreadedServer(Connection, port = args.port)
     connectionHandler.start()
