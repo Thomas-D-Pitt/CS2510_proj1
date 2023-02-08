@@ -34,7 +34,7 @@ class Server():
     chatrooms = []
 
     def __init__(self):
-        self. id = random.randint(1, 100000)
+        self.id = random.randint(1, 100000)
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
 
@@ -94,19 +94,24 @@ class Server():
 
 class Connection(rpc.Service):
     def exposed_getMessages(self, *args, **kwargs):
+        global SERVER
         return SERVER.getMessages(*args, **kwargs)
 
     def exposed_newMessage(self, *args, **kwargs):
+        global SERVER
         return SERVER.newMessage(*args, **kwargs)
 
     def exposed_availableRooms(self, *args, **kwargs):
+        global SERVER
         return SERVER.availableRooms(*args, **kwargs)
 
     def exposed_join(self, *args, **kwargs):
+        global SERVER
         return SERVER.join(*args, **kwargs)
 
     def exposed_getServerInfo(self):
-        return str(server), 
+        global SERVER
+        return str(SERVER), SERVER.id
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
@@ -114,6 +119,7 @@ def get_args(argv):
     return parser.parse_args()
 
 if __name__ == '__main__':
+    global SERVER
     print("Chat Server")
     args = get_args(sys.argv[1:])
     SERVER = Server()
