@@ -19,7 +19,7 @@ class Chatroom:
         return self.participants.remove(username)
 
     def newMessage(self, user, message):
-        self.messages.append((user, message))
+        self.messages.append((user, message, []))
 
     def get_messages(self, number):
         if number == -1:

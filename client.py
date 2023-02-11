@@ -75,7 +75,7 @@ class Client():
 
     def update_loop(self):
         rate = .5
-        #os.system('clear')
+        os.system('clear')
         while True:
 
             newContent = self.get_messages()
@@ -84,10 +84,10 @@ class Client():
                 sleep(1/rate)
                 continue
             
-            #os.system('clear')
-            count = 0
+            os.system('clear')
+            count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
-            for sender, msg in newContent:
+            for sender, msg, likes in newContent:
                 print(F"{count}. {sender}: {msg}")
                 count += 1
             self.lastContent = newContent[-10:]
