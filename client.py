@@ -118,7 +118,9 @@ class Client():
                 count += 1
             self.lastContent = newContent[-10:]
             for index in range(len(self.lastContent)):
-                self.lastContent[index][3] = len(self.lastContent[index][3])
+                id, sender, msg, likes = self.lastContent[index]
+                self.lastContent[index] = (id, sender, msg, len(likes))
+                
             self.displayedMessages = newContent
             self.lastChatters = newChatters
             sleep(1/rate)
