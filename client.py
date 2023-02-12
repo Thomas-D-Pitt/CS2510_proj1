@@ -97,9 +97,10 @@ class Client():
                 if newContent and self.lastContent:
                     index = 0
                     for id, sender, msg, likes in newContent:
+                        print(id, sender, msg, likes, self.lastContent[index])
                         if likes != self.lastContent[index][3]:
                             change = True
-                            print(id, sender, msg, likes, self.lastContent[index])
+                            
                             break
                         index += 1
 
