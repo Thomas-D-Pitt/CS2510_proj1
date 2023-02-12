@@ -97,7 +97,7 @@ class Client():
 
     def __setattr__(self, name, value):
         if name == "lastChatters":
-            print("here")
+            print("setting lastchatters Value:", value)
         return super().__setattr__(name, value)
 
 
@@ -113,7 +113,7 @@ class Client():
 
             newChatters = self.get_chatters(self.room)
 
-            if newContent == self.lastContent and newChatters == self.lastChatters:
+            if newContent == self.lastContent and str(newChatters) == str(self.lastChatters):
                 sleep(0.5/rate)
                 continue
             
@@ -131,7 +131,7 @@ class Client():
             sleep(1/rate)
             self.lastContent = newContent[-10:]
             self.displayedMessages = newContent
-            self.lastChatters = newChatters
+            self.lastChatters = str(newChatters)
             
         
 
