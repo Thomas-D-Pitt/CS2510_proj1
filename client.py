@@ -96,7 +96,7 @@ class Client():
                     print(F"Invalid Command")
 
     def __getattribute__(self, name):
-        if name == lastChatters:
+        if name == "lastChatters":
             print("here")
         return super().__getattribute__(name)
 
