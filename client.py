@@ -83,7 +83,7 @@ class Client():
                 print(F"Invalid Command")
 
     def update_loop(self):
-        rate = 5
+        rate = .2
         os.system('clear')
         print("Chat program started...")
         while True:
@@ -100,6 +100,7 @@ class Client():
                         if likes != self.lastContent[index][3]:
                             change = True
                             print(id, sender, msg, likes, self.lastContent[index])
+                            break
                         index += 1
 
                 if change == False:
