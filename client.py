@@ -11,7 +11,7 @@ class Client():
         self.lastContent = None
         self.lastChatters = None
         self.displayedMessages = None
-        self.fetchAll = False
+        self.showAll = False
         self.conn = rpc.connect(address, port)
         
         print("Available Rooms:", self.get_available_rooms())
@@ -51,14 +51,14 @@ class Client():
         return self.conn.root.exposed_getChatters(room)
 
     def get_messages(self):
-        if self.fetchAll:
-            self.fetchAll = False
+        if self.showAll:
             return self.conn.root.exposed_getMessages(self.name, self.room, -1)
         return self.conn.root.exposed_getMessages(self.name, self.room)
 
     def input_loop(self):
         sleep(.1)
         while True:
+            self.showAll = False
             cmd = input("").split(" ", 1)
             if len(cmd) == 2:
 
@@ -87,7 +87,7 @@ class Client():
                     print(F"Unknown command: {cmd[0]}")
             else:
                 if cmd[0] == "p":
-                    self.fetchAll = True
+                    self.showAll = True
                     self.lastContent = None
                 elif cmd[0] == "q":
                     self.conn.root.exposed_leave(self.name, self.room)
@@ -120,7 +120,7 @@ class Client():
                 else:
                     print(F"{count}. {sender}: {msg}")
                 count += 1
-            self.lastContent = newContent[-10:]
+            self.lastContent = newContent
             self.displayedMessages = newContent
             self.lastChatters = newChatters
             sleep(1/rate)
