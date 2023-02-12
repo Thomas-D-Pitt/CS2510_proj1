@@ -53,7 +53,7 @@ class Client():
     def input_loop(self):
         sleep(.1)
         while True:
-            cmd = input(" >").split(" ", 1)
+            cmd = input("").split(" ", 1)
             
             if cmd[0] == "a":
                 self.send_message(cmd[1])
@@ -92,7 +92,7 @@ class Client():
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
             for id, sender, msg, likes in newContent:
-                if likes != []:
+                if len(likes) != 0:
                     print(F"{count}. {sender}: {msg}\t({len(likes)} Likes)")
                 else:
                     print(F"{count}. {sender}: {msg}")

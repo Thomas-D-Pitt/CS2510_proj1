@@ -33,6 +33,7 @@ class Chatroom:
     def likeMessage(self, user, messageid):
         if user not in self.messages[messageid][3]:
             self.messages[messageid][3].append(user)
+            print(F"liked message {self.messages[messageid]}")
             return True
         else:
             return False
