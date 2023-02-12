@@ -95,12 +95,6 @@ class Client():
                 else:
                     print(F"Invalid Command")
 
-    def __setattr__(self, name, value):
-        if name == "lastChatters":
-            print("setting lastchatters Value:", value)
-        return super().__setattr__(name, value)
-
-
     def update_loop(self):
         rate = 3
         os.system('clear')
