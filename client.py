@@ -66,6 +66,10 @@ class Client():
                 if self.join_room(cmd[1]):
                     print(F"joined {cmd[1]}")
 
+            elif cmd[0] == "l":
+                messageid = self.lastContent[int(cmd[1])][0]
+                self.conn.root.exposed_like(self.name, self.room, messageid)
+
             elif cmd[0] == "q":
                 self.conn.root.exposed_leave(self.name, self.room)
                 sys.exit()
@@ -87,8 +91,8 @@ class Client():
             os.system('clear')
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
-            for sender, msg, likes in newContent:
-                print(F"{count}. {sender}: {msg}")
+            for id, sender, msg, likes in newContent:
+                print(F"{count}. {sender}: {msg}    ({len(likes)} Likes)")
                 count += 1
             self.lastContent = newContent[-10:]
             self.lastChatters = newChatters
