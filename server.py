@@ -1,28 +1,49 @@
 import sys, argparse, os
 import rpyc as rpc
 from threading import Thread
-from time import sleep
+from time import sleep, time
 from rpyc.utils.server import ThreadedServer
 
 class Chatroom:
     
     def __init__(self, name):
         self.participants = []
+        self.participantHeartbeats = {}
         self.messages = []
         self.name = name
 
+        purge_thread = Thread(target=self.purge) 
+        purge_thread.start()
+
+    def purge(self):
+        timeout = 15
+        while True:
+            sleep(timeout)
+            now = time()
+            for user in self.participants:
+                if self.participantHeartbeats[user] - time > timeout:
+                    self.remove_chatter(user)
+
     def add_chatter(self, username):
-        self.participants.append(username)
+        self.participants.append((username))
+        self.participantHeartbeats[username] = time()
         self.participants = sorted(self.participants)
         return True
 
     def remove_chatter(self, username):
+        self.participantHeartbeats[username] = None
         return self.participants.remove(username)
 
     def newMessage(self, user, message):
         self.messages.append((len(self.messages), user, message, []))
 
-    def get_messages(self, number):
+    def heartbeat(self, user):
+        self.participantHeartbeats[user] = time()
+
+    def get_messages(self, user, number):
+
+        self.heartbeat(user)
+
         if number == -1:
             val = []
             for id, user, message, likes in self.messages:
@@ -107,7 +128,7 @@ class Server():
     def getMessages(self, user, roomName, number = 10):
         room = self.getRoom(roomName)
         if room and user in room.participants:
-            return room.get_messages(number)
+            return room.get_messages(user, number)
         else:
             return None
 
@@ -132,7 +153,6 @@ class Server():
         else:
             return False
 
-
     def update_loop(self):
         rate = .5
         os.system('clear')
@@ -147,7 +167,7 @@ class Server():
 
 class Connection(rpc.Service):
 
-    def __init__(self):
+    def on_connect(self, conn):
         self.clientName = None
         self.clientRoom = None
 
