@@ -152,7 +152,7 @@ class Connection(rpc.Service):
         self.clientRoom = None
 
     def on_disconnect(self, conn):
-        print("disconnect")
+        print("disconnect", self.clientName, self.clientRoom)
         if self.clientName and self.clientRoom:
             print(SERVER.leave(self.clientName, self.roomName))
 
