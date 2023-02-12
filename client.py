@@ -117,7 +117,7 @@ class Client():
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
             for id, sender, msg, likes in newContent:
-                if len(likes) != 0:
+                if likes != 0:
                     print(F"{count}. {sender}: {msg}\t({len(likes)} Likes)")
                 else:
                     print(F"{count}. {sender}: {msg}")
