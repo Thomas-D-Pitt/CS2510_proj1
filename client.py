@@ -92,7 +92,7 @@ class Client():
                     print(F"Invalid Command")
 
     def update_loop(self):
-        rate = 3
+        rate = .25
         os.system('clear')
         print("Chat program started...")
         while True:
@@ -101,8 +101,9 @@ class Client():
                 newContent = self.get_messages(-1)
             else:
                 newContent = self.get_messages()
-                
+
             if newContent == None: newContent = []
+
             newChatters = self.get_chatters(self.room)
             if newContent == self.lastContent and newChatters == self.lastChatters:
                 change = False
