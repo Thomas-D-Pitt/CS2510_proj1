@@ -5,9 +5,10 @@ from time import sleep
 from rpyc.utils.server import ThreadedServer
 
 class Chatroom:
-    participants = []
-    messages = []
+    
     def __init__(self, name):
+        self.participants = []
+        self.messages = []
         self.name = name
 
     def add_chatter(self, username):
