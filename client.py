@@ -106,19 +106,8 @@ class Client():
 
             newChatters = self.get_chatters(self.room)
             if newContent == self.lastContent and newChatters == self.lastChatters:
-                change = False
-
-                if newContent and self.lastContent and newChatters == self.lastChatters:
-                    index = 0
-                    for id, sender, msg, likes in newContent:
-                        if len(likes) != self.lastContent[index][3]:
-                            change = True
-                            break
-                        index += 1
-
-                if change == False:
-                    sleep(1/rate)
-                    continue
+                sleep(1/rate)
+                continue
             
             
             os.system('clear')

@@ -23,12 +23,21 @@ class Chatroom:
 
     def get_messages(self, number):
         if number == -1:
-            return self.messages
+            val = []
+            for id, user, message, likes in self.messages:
+                val.append(id, user, message, len(likes))
+            return val
 
         if len(self.messages) <= number:
-            return self.messages
+            val = []
+            for id, user, message, likes in self.messages:
+                val.append(id, user, message, len(likes))
+            return val
 
-        return self.messages[-number:]
+        val = []
+        for id, user, message, likes in self.messages[-number:]:
+            val.append(id, user, message, len(likes))
+        return val
 
     def likeMessage(self, user, messageid):
         if user not in self.messages[messageid][3]:
