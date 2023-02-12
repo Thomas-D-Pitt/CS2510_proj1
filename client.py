@@ -92,7 +92,7 @@ class Client():
                     print(F"Invalid Command")
 
     def update_loop(self):
-        rate = .25
+        rate = 3
         os.system('clear')
         print("Chat program started...")
         while True:
@@ -118,7 +118,7 @@ class Client():
             print(F"Group: {self.room} \nParticipants:{newChatters}")
             for id, sender, msg, likes in newContent:
                 if likes != 0:
-                    print(F"{count}. {sender}: {msg}\t({len(likes)} Likes)")
+                    print(F"{count}. {sender}: {msg}\t({likes} Likes)")
                 else:
                     print(F"{count}. {sender}: {msg}")
                 count += 1
