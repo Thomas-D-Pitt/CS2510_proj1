@@ -98,7 +98,7 @@ class Client():
     def __getattribute__(self, name):
         if name == lastChatters:
             print("here")
-        return super()__getattribute__(name)
+        return super().__getattribute__(name)
 
     def update_loop(self):
         rate = 3
