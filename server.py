@@ -16,11 +16,12 @@ class Chatroom:
         purge_thread.start()
 
     def purge(self):
-        timeout = 15
+        timeout = 10
         while True:
             sleep(timeout)
             now = time()
             for user in self.participants:
+                print(user, self.participantHeartbeats[user], now)
                 if self.participantHeartbeats[user] - now > timeout:
                     self.remove_chatter(user)
 
