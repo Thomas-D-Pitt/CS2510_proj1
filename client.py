@@ -69,7 +69,7 @@ class Client():
                         print(F"joined {cmd[1]}")
 
                 elif cmd[0] == "l":
-                    if self.displayedMessages:
+                    if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
                         messageid = self.displayedMessages[int(cmd[1]) - 1][0]
                         self.conn.root.exposed_like(self.name, self.room, messageid)
 
@@ -79,8 +79,8 @@ class Client():
 
                 else:
                     print(F"Unknown command: {cmd[0]}")
-
-            print(F"Invalid Command")
+            else:
+                print(F"Invalid Command")
 
     def update_loop(self):
         rate = 5
