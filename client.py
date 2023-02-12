@@ -111,13 +111,13 @@ class Client():
                 if newContent and self.lastContent and newChatters == self.lastChatters:
                     index = 0
                     for id, sender, msg, likes in newContent:
-                        print(id, sender, msg, likes, self.lastContent[index])
                         if len(likes) != self.lastContent[index][3]:
                             change = True
                             break
                         index += 1
 
                 if change == False:
+                    print(id, sender, msg, likes, self.lastContent[index])
                     sleep(1/rate)
                     continue
             
