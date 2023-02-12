@@ -106,6 +106,9 @@ class Client():
             if newContent == None: newContent = []
 
             newChatters = self.get_chatters(self.room)
+
+            print(self.lastChatters, newChatters)
+
             if newContent == self.lastContent and newChatters == self.lastChatters:
                 sleep(1/rate)
                 continue
