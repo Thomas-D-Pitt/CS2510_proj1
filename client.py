@@ -51,6 +51,7 @@ class Client():
 
     def get_messages(self):
         if self.fetchAll:
+            self.fetchAll = False
             return self.conn.root.exposed_getMessages(self.name, self.room, -1)
         return self.conn.root.exposed_getMessages(self.name, self.room)
 
@@ -86,6 +87,7 @@ class Client():
             else:
                 if cmd[0] == "p":
                     self.fetchAll = True
+                    self.lastContent = None
                 elif cmd[0] == "q":
                     self.conn.root.exposed_leave(self.name, self.room)
                     self.room = None
