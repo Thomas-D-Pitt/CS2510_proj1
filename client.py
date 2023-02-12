@@ -50,6 +50,8 @@ class Client():
         return self.conn.root.exposed_getChatters(room)
 
     def get_messages(self):
+        if self.fetchAll:
+            return self.conn.root.exposed_getMessages(self.name, self.room, -1)
         return self.conn.root.exposed_getMessages(self.name, self.room)
 
     def input_loop(self):
@@ -96,10 +98,7 @@ class Client():
         print("Chat program started...")
         while True:
 
-            if self.fetchAll:
-                newContent = self.get_messages(-1)
-            else:
-                newContent = self.get_messages()
+            newContent = self.get_messages()
 
             if newContent == None: newContent = []
 
