@@ -79,15 +79,14 @@ class Client():
                         messageid = self.displayedMessages[int(cmd[1]) - 1][0]
                         self.conn.root.exposed_unlike(self.name, self.room, messageid)
 
-                elif cmd[0] == "q":
-                    self.conn.root.exposed_leave(self.name, self.room)
-                    self.room = None
-
                 else:
                     print(F"Unknown command: {cmd[0]}")
             else:
                 if cmd[0] == "p":
                     self.fetchAll = True
+                elif cmd[0] == "q":
+                    self.conn.root.exposed_leave(self.name, self.room)
+                    self.room = None
                 else:
                     print(F"Invalid Command")
 
@@ -111,9 +110,6 @@ class Client():
             
             
             os.system('clear')
-            print("\n")
-            print(newContent, self.lastContent)
-            print("\n")
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
             for id, sender, msg, likes in newContent:
