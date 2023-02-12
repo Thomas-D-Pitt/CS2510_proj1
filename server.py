@@ -25,18 +25,18 @@ class Chatroom:
         if number == -1:
             val = []
             for id, user, message, likes in self.messages:
-                val.append(id, user, message, len(likes))
+                val.append((id, user, message, len(likes)))
             return val
 
         if len(self.messages) <= number:
             val = []
             for id, user, message, likes in self.messages:
-                val.append(id, user, message, len(likes))
+                val.append((id, user, message, len(likes)))
             return val
 
         val = []
         for id, user, message, likes in self.messages[-number:]:
-            val.append(id, user, message, len(likes))
+            val.append((id, user, message, len(likes)))
         return val
 
     def likeMessage(self, user, messageid):
