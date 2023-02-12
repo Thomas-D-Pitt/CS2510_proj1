@@ -67,7 +67,7 @@ class Client():
                     print(F"joined {cmd[1]}")
 
             elif cmd[0] == "l":
-                messageid = self.lastContent[int(cmd[1])][0]
+                messageid = self.lastContent[int(cmd[1] - 1)][0]
                 self.conn.root.exposed_like(self.name, self.room, messageid)
 
             elif cmd[0] == "q":
@@ -80,6 +80,7 @@ class Client():
     def update_loop(self):
         rate = .5
         os.system('clear')
+        print("Chat program started...")
         while True:
 
             newContent = self.get_messages()
