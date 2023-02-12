@@ -79,11 +79,9 @@ class Server():
         if room:
             return room.add_chatter(user)
             
-
         newRoom = Chatroom(roomName)
         self.chatrooms.append(newRoom)
-        newRoom.add_chatter(user)
-        return True
+        return newRoom.add_chatter(user)
 
     def leave(self, user, roomName):
         if user == None:
@@ -148,6 +146,14 @@ class Server():
             sleep(1/rate)
 
 class Connection(rpc.Service):
+
+    def __init__(self):
+        self.clientName = None
+        self.clientRoom = None
+
+    def on_disconnect(self, conn):
+        SERVER.leave(user, roomName)
+
     def exposed_getMessages(self, *args, **kwargs):
         global SERVER
         return SERVER.getMessages(*args, **kwargs)
@@ -164,13 +170,21 @@ class Connection(rpc.Service):
         global SERVER
         return SERVER.availableRooms(*args, **kwargs)
 
-    def exposed_join(self, *args, **kwargs):
+    def exposed_join(self, user, roomName):
         global SERVER
-        return SERVER.join(*args, **kwargs)
+        success = SERVER.join(user, roomName)
+        if success:
+            self.clientName = user
+            self.roomName = roomName
+        return success
 
     def exposed_leave(self, *args, **kwargs):
         global SERVER
-        return SERVER.leave(*args, **kwargs)
+        success = SERVER.leave(*args, **kwargs)
+        if success:
+            self.clientName = None
+            self.clientRoom = None
+        return success
 
     def exposed_like(self, *args, **kwargs):
         global SERVER
