@@ -85,28 +85,19 @@ class Client():
 
             newContent = self.get_messages()
             newChatters = self.get_chatters(self.room)
-            if newContent and newContent[-10:] == self.lastContent[-10:] and newChatters == self.lastChatters:
-                index = 0
-                change = False
-                for id, sender, msg, likes in newContent:
-                    if likes and likes != self.lastContent[3]:
-                        change == True
-                        break
-                    index += 1
-                if not change:
-                    sleep(1/rate)
-                    continue
+            if newContent[-10:] == self.lastContent[-10:] and newChatters == self.lastChatters:
+                sleep(1/rate)
+                continue
             
             os.system('clear')
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
-            if newContent:
-                for id, sender, msg, likes in newContent:
-                    if len(likes) != 0:
-                        print(F"{count}. {sender}: {msg}\t({len(likes)} Likes)")
-                    else:
-                        print(F"{count}. {sender}: {msg}")
-                    count += 1
+            for id, sender, msg, likes in newContent:
+                if len(likes) != 0:
+                    print(F"{count}. {sender}: {msg}\t({len(likes)} Likes)")
+                else:
+                    print(F"{count}. {sender}: {msg}")
+                count += 1
             self.lastContent = newContent
             self.lastChatters = newChatters
             sleep(1/rate)
