@@ -20,8 +20,8 @@ class Chatroom:
         while True:
             sleep(timeout)
             now = time()
-            print(self.participantHeartbeats[user], now)
             for user in self.participants:
+                print(self.participantHeartbeats[user], now)
                 if self.participantHeartbeats[user] - time > timeout:
                     self.remove_chatter(user)
 
@@ -156,9 +156,9 @@ class Server():
 
     def update_loop(self):
         rate = .5
-        #os.system('clear')
+        os.system('clear')
         while True:
-            os.system('clear')
+            #os.system('clear')
             print(F"Active rooms:")
             count = 1
             for room in self.chatrooms:
