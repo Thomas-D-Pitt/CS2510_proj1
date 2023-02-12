@@ -55,30 +55,32 @@ class Client():
         sleep(.1)
         while True:
             cmd = input("").split(" ", 1)
-            
-            if cmd[0] == "a":
-                self.send_message(cmd[1])
+            if len(cmd) == 2:
 
-            elif cmd[0] == "u":
-                self.set_name(cmd[1])
-                print(F"Username set to {cmd[1]}")
+                if cmd[0] == "a":
+                    self.send_message(cmd[1])
 
-            elif cmd[0] == "j":
-                if self.join_room(cmd[1]):
-                    print(F"joined {cmd[1]}")
+                elif cmd[0] == "u":
+                    self.set_name(cmd[1])
+                    print(F"Username set to {cmd[1]}")
 
-            elif cmd[0] == "l":
-                if self.displayedMessages:
-                    messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                    self.conn.root.exposed_like(self.name, self.room, messageid)
-                    
+                elif cmd[0] == "j":
+                    if self.join_room(cmd[1]):
+                        print(F"joined {cmd[1]}")
 
-            elif cmd[0] == "q":
-                self.conn.root.exposed_leave(self.name, self.room)
-                self.room = None
+                elif cmd[0] == "l":
+                    if self.displayedMessages:
+                        messageid = self.displayedMessages[int(cmd[1]) - 1][0]
+                        self.conn.root.exposed_like(self.name, self.room, messageid)
 
-            else:
-                print(F"Unknown command: {cmd[0]}")
+                elif cmd[0] == "q":
+                    self.conn.root.exposed_leave(self.name, self.room)
+                    self.room = None
+
+                else:
+                    print(F"Unknown command: {cmd[0]}")
+
+            print(F"Invalid Command")
 
     def update_loop(self):
         rate = 5
@@ -90,8 +92,18 @@ class Client():
             if newContent == None: newContent = []
             newChatters = self.get_chatters(self.room)
             if newContent == self.lastContent and newChatters == self.lastChatters:
-                sleep(1/rate)
-                continue
+                change = False
+
+                if newContent and self.lastContent:
+                    index = 0
+                    for id, sender, msg, likes in newContent:
+                        if likes != self.lastContent[index]:
+                            change = True
+                        index += 1
+
+                if change == False:
+                    sleep(1/rate)
+                    continue
             
             os.system('clear')
             count = 1
