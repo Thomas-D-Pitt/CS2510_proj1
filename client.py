@@ -123,10 +123,12 @@ class Client():
                 else:
                     print(F"{count}. {sender}: {msg}")
                 count += 1
+                
+            sleep(1/rate)
             self.lastContent = newContent[-10:]
             self.displayedMessages = newContent
             self.lastChatters = newChatters
-            sleep(1/rate)
+            
         
 
 def get_args(argv):

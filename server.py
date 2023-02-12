@@ -152,7 +152,8 @@ class Connection(rpc.Service):
         self.clientRoom = None
 
     def on_disconnect(self, conn):
-        SERVER.leave(self.user, self.roomName)
+        if self.clientName and self.clientRoom:
+            SERVER.leave(self.clientName, self.roomName)
 
     def exposed_getMessages(self, *args, **kwargs):
         global SERVER
