@@ -134,7 +134,7 @@ class Server():
 
 
     def update_loop(self):
-        rate = .1
+        rate = .5
         os.system('clear')
         while True:
             os.system('clear')
@@ -152,9 +152,8 @@ class Connection(rpc.Service):
         self.clientRoom = None
 
     def on_disconnect(self, conn):
-        print("disconnect", self.clientName, self.clientRoom)
         if self.clientName and self.clientRoom:
-            print(SERVER.leave(self.clientName, self.clientRoom))
+            SERVER.leave(self.clientName, self.clientRoom)
 
     def exposed_getMessages(self, *args, **kwargs):
         global SERVER
