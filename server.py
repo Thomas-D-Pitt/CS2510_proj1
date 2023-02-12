@@ -194,5 +194,5 @@ if __name__ == '__main__':
     print("Chat Server")
     args = get_args(sys.argv[1:])
     SERVER = Server()
-    connectionHandler = ThreadedServer(Connection, port = args.port)
+    connectionHandler = ThreadedServer(Connection, port = args.port, listener_timeout=2)
     connectionHandler.start()
