@@ -70,19 +70,18 @@ class Client():
             elif cmd[0] == "l":
                 if self.displayedMessages:
                     messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                    return self.conn.root.exposed_like(self.name, self.room, messageid)
-                else:
-                    return False
+                    self.conn.root.exposed_like(self.name, self.room, messageid)
+                    
 
             elif cmd[0] == "q":
                 self.conn.root.exposed_leave(self.name, self.room)
-                sys.exit()
+                self.room = None
 
             else:
                 print(F"Unknown command: {cmd[0]}")
 
     def update_loop(self):
-        rate = .5
+        rate = 5
         os.system('clear')
         print("Chat program started...")
         while True:
