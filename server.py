@@ -21,7 +21,6 @@ class Chatroom:
             sleep(timeout)
             now = time()
             for user in self.participants:
-                print(user, self.participantHeartbeats[user], now)
                 if self.participantHeartbeats[user] - now > timeout:
                     self.remove_chatter(user)
 
@@ -158,7 +157,7 @@ class Server():
         rate = .5
         os.system('clear')
         while True:
-            #os.system('clear')
+            os.system('clear')
             print(F"Active rooms:")
             count = 1
             for room in self.chatrooms:
