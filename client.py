@@ -110,7 +110,7 @@ class Client():
             print(self.lastChatters, newChatters)
 
             if newContent == self.lastContent and newChatters == self.lastChatters:
-                sleep(1/rate)
+                sleep(0.9/rate)
                 continue
             
             
@@ -123,7 +123,7 @@ class Client():
                 else:
                     print(F"{count}. {sender}: {msg}")
                 count += 1
-                
+
             sleep(1/rate)
             self.lastContent = newContent[-10:]
             self.displayedMessages = newContent
