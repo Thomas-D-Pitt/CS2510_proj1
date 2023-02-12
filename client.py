@@ -95,10 +95,11 @@ class Client():
                 else:
                     print(F"Invalid Command")
 
-    def __getattribute__(self, name):
+    def __setattr__(self, name, value):
         if name == "lastChatters":
             print("here")
-        return super().__getattribute__(name)
+        return super().__setattr__(name, value)
+
 
     def update_loop(self):
         rate = 3
