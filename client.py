@@ -8,6 +8,7 @@ class Client():
     room = None
     lastContent = None
     lastChatters = None
+    displayedMessages = None
     def __init__(self, address, port):
         self.conn = rpc.connect(address, port)
         
@@ -67,8 +68,11 @@ class Client():
                     print(F"joined {cmd[1]}")
 
             elif cmd[0] == "l":
-                messageid = self.lastContent[int(cmd[1]) - 1][0]
-                self.conn.root.exposed_like(self.name, self.room, messageid)
+                if self.displayedMessages:
+                    messageid = self.displayedMessages[int(cmd[1]) - 1][0]
+                    return self.conn.root.exposed_like(self.name, self.room, messageid)
+                else:
+                    return False
 
             elif cmd[0] == "q":
                 self.conn.root.exposed_leave(self.name, self.room)
@@ -86,7 +90,7 @@ class Client():
             newContent = self.get_messages()
             if newContent == None: newContent = []
             newChatters = self.get_chatters(self.room)
-            if self.lastContent and newContent[-10:] == self.lastContent[-10:] and newChatters == self.lastChatters:
+            if newContent == self.lastContent and newChatters == self.lastChatters:
                 sleep(1/rate)
                 continue
             
@@ -99,7 +103,8 @@ class Client():
                 else:
                     print(F"{count}. {sender}: {msg}")
                 count += 1
-            self.lastContent = newContent
+            self.lastContent = newContent[-10:]
+            self.displayedMessages = newContent
             self.lastChatters = newChatters
             sleep(1/rate)
         
