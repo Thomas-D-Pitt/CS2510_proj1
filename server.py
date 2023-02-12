@@ -156,7 +156,7 @@ class Server():
 
     def update_loop(self):
         rate = .5
-        os.system('clear')
+        #os.system('clear')
         while True:
             os.system('clear')
             print(F"Active rooms:")
