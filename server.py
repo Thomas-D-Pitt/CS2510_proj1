@@ -21,8 +21,7 @@ class Chatroom:
             sleep(timeout)
             now = time()
             for user in self.participants:
-                print(self.participantHeartbeats[user], now)
-                if self.participantHeartbeats[user] - time > timeout:
+                if self.participantHeartbeats[user] - now > timeout:
                     self.remove_chatter(user)
 
     def add_chatter(self, username):
