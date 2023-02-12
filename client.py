@@ -117,11 +117,14 @@ class Client():
                         index += 1
 
                 if change == False:
-                    print(id, sender, msg, likes, self.lastContent[index])
                     sleep(1/rate)
                     continue
             
+            
             os.system('clear')
+            print("\n")
+            print(newContent, self.lastContent)
+            print("\n")
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
             for id, sender, msg, likes in newContent:
