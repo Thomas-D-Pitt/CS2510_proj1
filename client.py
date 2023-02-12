@@ -9,6 +9,7 @@ class Client():
     lastContent = None
     lastChatters = None
     displayedMessages = None
+    fetchAll = False
     def __init__(self, address, port):
         self.conn = rpc.connect(address, port)
         
@@ -73,6 +74,11 @@ class Client():
                         messageid = self.displayedMessages[int(cmd[1]) - 1][0]
                         self.conn.root.exposed_like(self.name, self.room, messageid)
 
+                elif cmd[0] == "r":
+                    if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
+                        messageid = self.displayedMessages[int(cmd[1]) - 1][0]
+                        self.conn.root.exposed_unlike(self.name, self.room, messageid)
+
                 elif cmd[0] == "q":
                     self.conn.root.exposed_leave(self.name, self.room)
                     self.room = None
@@ -80,15 +86,22 @@ class Client():
                 else:
                     print(F"Unknown command: {cmd[0]}")
             else:
-                print(F"Invalid Command")
+                if cmd[0] == "p":
+                    self.fetchAll = True
+                else:
+                    print(F"Invalid Command")
 
     def update_loop(self):
-        rate = .2
+        rate = 3
         os.system('clear')
         print("Chat program started...")
         while True:
 
-            newContent = self.get_messages()
+            if self.fetchAll:
+                newContent = self.get_messages(-1)
+            else:
+                newContent = self.get_messages()
+                
             if newContent == None: newContent = []
             newChatters = self.get_chatters(self.room)
             if newContent == self.lastContent and newChatters == self.lastChatters:
@@ -120,7 +133,7 @@ class Client():
             for index in range(len(self.lastContent)):
                 id, sender, msg, likes = self.lastContent[index]
                 self.lastContent[index] = (id, sender, msg, len(likes))
-                
+
             self.displayedMessages = newContent
             self.lastChatters = newChatters
             sleep(1/rate)

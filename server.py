@@ -33,7 +33,13 @@ class Chatroom:
     def likeMessage(self, user, messageid):
         if user not in self.messages[messageid][3]:
             self.messages[messageid][3].append(user)
-            print(F"liked message {self.messages[messageid]}")
+            return True
+        else:
+            return False
+
+    def unlikeMessage(self, user, messageid):
+        if user in self.messages[messageid][3]:
+            self.messages[messageid][3].remove(user)
             return True
         else:
             return False
@@ -110,6 +116,13 @@ class Server():
         else:
             return False
 
+    def unlikeMessage(self, user, roomName, messageid):
+        room = self.getRoom(roomName)
+        if room and user in room.participants:
+            return room.unlikeMessage(user, messageid)
+        else:
+            return False
+
 
     def update_loop(self):
         rate = .5
@@ -151,6 +164,10 @@ class Connection(rpc.Service):
     def exposed_like(self, *args, **kwargs):
         global SERVER
         return SERVER.likeMessage(*args, **kwargs)
+
+    def exposed_unlike(self, *args, **kwargs):
+        global SERVER
+        return SERVER.unlikeMessage(*args, **kwargs)
 
     def exposed_getServerInfo(self):
         global SERVER
