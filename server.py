@@ -134,7 +134,7 @@ class Server():
 
 
     def update_loop(self):
-        rate = .5
+        rate = .1
         os.system('clear')
         while True:
             os.system('clear')
@@ -152,6 +152,7 @@ class Connection(rpc.Service):
         self.clientRoom = None
 
     def on_disconnect(self, conn):
+        print("disconnect")
         if self.clientName and self.clientRoom:
             SERVER.leave(self.clientName, self.roomName)
 
