@@ -55,9 +55,10 @@ class Chatroom:
             return False
 
 class Server():
-    chatrooms = []
+    
 
     def __init__(self):
+        self.chatrooms = []
         receive_thread = Thread(target=self.update_loop) 
         receive_thread.start()
 

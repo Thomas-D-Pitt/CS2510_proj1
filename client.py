@@ -4,13 +4,14 @@ from time import sleep
 import rpyc as rpc
 
 class Client():
-    name = None
-    room = None
-    lastContent = None
-    lastChatters = None
-    displayedMessages = None
-    fetchAll = False
+    
     def __init__(self, address, port):
+        self.name = None
+        self.room = None
+        self.lastContent = None
+        self.lastChatters = None
+        self.displayedMessages = None
+        self.fetchAll = False
         self.conn = rpc.connect(address, port)
         
         print("Available Rooms:", self.get_available_rooms())
