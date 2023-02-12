@@ -20,6 +20,7 @@ class Chatroom:
         while True:
             sleep(timeout)
             now = time()
+            print(self.participantHeartbeats[user], now)
             for user in self.participants:
                 if self.participantHeartbeats[user] - time > timeout:
                     self.remove_chatter(user)
