@@ -173,7 +173,10 @@ class Connection(rpc.Service):
 
     def on_disconnect(self, conn):
         if self.clientName and self.clientRoom:
-            SERVER.leave(self.clientName, self.clientRoom)
+            try:
+                SERVER.leave(self.clientName, self.clientRoom)
+            except:
+                print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed')
 
     def exposed_getMessages(self, *args, **kwargs):
         global SERVER

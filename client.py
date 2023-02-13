@@ -100,7 +100,7 @@ class Client():
                 elif cmd[0] == "q":
                     self.conn.root.exposed_leave(self.name, self.room)
                     self.room = None
-
+                    os.system('clear')
                     sys.exit()
                 else:
                     print(F"Invalid Command")
