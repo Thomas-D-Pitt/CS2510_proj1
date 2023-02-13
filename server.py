@@ -1,6 +1,6 @@
 import sys, argparse, os
 import rpyc as rpc
-from threading import Thread
+from threading import Thread, Lock
 from time import sleep, time
 from rpyc.utils.server import ThreadedServer
 
@@ -165,6 +165,15 @@ class Server():
                 count += 1
             sleep(1/rate)
 
+def with_lock(fn): 
+
+    @wraps(fn)
+    def locker(*args, **kwargs):
+        global LOCK
+        with LOCK:
+            val = fn(*args, **kwargs)
+        return val
+
 class Connection(rpc.Service):
 
     def on_connect(self, conn):
@@ -178,22 +187,27 @@ class Connection(rpc.Service):
             except:
                 print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed')
 
+    @with_lock
     def exposed_getMessages(self, *args, **kwargs):
         global SERVER
         return SERVER.getMessages(*args, **kwargs)
 
+    @with_lock
     def exposed_getChatters(self, *args, **kwargs):
         global SERVER
         return SERVER.getChatters(*args, **kwargs)
 
+    @with_lock
     def exposed_newMessage(self, *args, **kwargs):
         global SERVER
         return SERVER.newMessage(*args, **kwargs)
 
+    @with_lock
     def exposed_availableRooms(self, *args, **kwargs):
         global SERVER
         return SERVER.availableRooms(*args, **kwargs)
 
+    @with_lock
     def exposed_join(self, user, roomName):
         global SERVER
         success = SERVER.join(user, roomName)
@@ -202,6 +216,7 @@ class Connection(rpc.Service):
             self.clientRoom = roomName
         return success
 
+    @with_lock
     def exposed_leave(self, *args, **kwargs):
         global SERVER
         success = SERVER.leave(*args, **kwargs)
@@ -210,14 +225,17 @@ class Connection(rpc.Service):
             self.clientRoom = None
         return success
 
+    @with_lock
     def exposed_like(self, *args, **kwargs):
         global SERVER
         return SERVER.likeMessage(*args, **kwargs)
 
+    @with_lock
     def exposed_unlike(self, *args, **kwargs):
         global SERVER
         return SERVER.unlikeMessage(*args, **kwargs)
 
+    @with_lock
     def exposed_getServerInfo(self):
         global SERVER
         return str(SERVER)
@@ -228,7 +246,8 @@ def get_args(argv):
     return parser.parse_args()
 
 if __name__ == '__main__':
-    global SERVER
+    global SERVER, LOCK
+    LOCK = Lock()
     print("Chat Server")
     args = get_args(sys.argv[1:])
     SERVER = Server()

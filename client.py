@@ -59,51 +59,55 @@ class Client():
     def input_loop(self):
         sleep(.1)
         while True:
-            cmd = input("").split(" ", 1)
-            if len(cmd) == 2:
+            try:
+                raw = input("")
+                cmd = raw.split(" ", 1)
+                if len(cmd) == 2:
 
-                if cmd[0] == "a":
-                    self.send_message(cmd[1])
+                    if cmd[0] == "a":
+                        self.send_message(cmd[1])
 
-                elif cmd[0] == "u":
-                    if self.room and self.name:
+                    elif cmd[0] == "u":
+                        if self.room and self.name:
+                            self.conn.root.exposed_leave(self.name, self.room)
+                            self.room = None
+
+                        self.set_name(cmd[1])
+                        print(F"Username set to {cmd[1]}")
+
+                    elif cmd[0] == "j":
+                        if self.room and self.name:
+                            self.conn.root.exposed_leave(self.name, self.room)
+                            self.room = None
+
+                        if self.join_room(cmd[1]):
+                            print(F"joined {cmd[1]}")
+
+                    elif cmd[0] == "l":
+                        if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
+                            messageid = self.displayedMessages[int(cmd[1]) - 1][0]
+                            self.conn.root.exposed_like(self.name, self.room, messageid)
+
+                    elif cmd[0] == "r":
+                        if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
+                            messageid = self.displayedMessages[int(cmd[1]) - 1][0]
+                            self.conn.root.exposed_unlike(self.name, self.room, messageid)
+
+                    else:
+                        print(F"Unknown command: {cmd[0]}")
+                else:
+                    if cmd[0] == "p":
+                        self.fetchAll = True
+                        self.lastContent = None
+                    elif cmd[0] == "q":
                         self.conn.root.exposed_leave(self.name, self.room)
                         self.room = None
-
-                    self.set_name(cmd[1])
-                    print(F"Username set to {cmd[1]}")
-
-                elif cmd[0] == "j":
-                    if self.room and self.name:
-                        self.conn.root.exposed_leave(self.name, self.room)
-                        self.room = None
-
-                    if self.join_room(cmd[1]):
-                        print(F"joined {cmd[1]}")
-
-                elif cmd[0] == "l":
-                    if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
-                        messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                        self.conn.root.exposed_like(self.name, self.room, messageid)
-
-                elif cmd[0] == "r":
-                    if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
-                        messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                        self.conn.root.exposed_unlike(self.name, self.room, messageid)
-
-                else:
-                    print(F"Unknown command: {cmd[0]}")
-            else:
-                if cmd[0] == "p":
-                    self.fetchAll = True
-                    self.lastContent = None
-                elif cmd[0] == "q":
-                    self.conn.root.exposed_leave(self.name, self.room)
-                    self.room = None
-                    os.system('clear')
-                    sys.exit()
-                else:
-                    print(F"Invalid Command")
+                        os.system('clear')
+                        sys.exit()
+                    else:
+                        print(F"Invalid Command")
+            except Exception as e:
+                print(F'Exception "{e}" raised while processing {raw}')
 
     def update_loop(self):
         rate = 3
