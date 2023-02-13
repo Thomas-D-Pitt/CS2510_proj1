@@ -66,6 +66,10 @@ class Client():
                     self.send_message(cmd[1])
 
                 elif cmd[0] == "u":
+                    if self.room and self.name:
+                        self.conn.root.exposed_leave(self.name, self.room)
+                        self.room = None
+                        
                     self.set_name(cmd[1])
                     print(F"Username set to {cmd[1]}")
 
@@ -140,6 +144,7 @@ if __name__ == '__main__':
     #args = get_args(sys.argv[1:])
 
     print("connect to server using 'c <address>:<port>'")
+    print("suggested: c localhost:12000")
     address = None
     port = None
     while address == None or port == None:
