@@ -166,9 +166,7 @@ class Server():
             sleep(1/rate)
 
 def with_lock(fn): 
-
-    @wraps(fn)
-    def locker(*args, **kwargs):
+    def inner(*args, **kwargs):
         global LOCK
         with LOCK:
             val = fn(*args, **kwargs)
