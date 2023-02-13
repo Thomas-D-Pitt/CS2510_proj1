@@ -16,11 +16,11 @@ class Client():
         
         print("Available Rooms:", self.get_available_rooms())
 
-        receive_thread = Thread(target=self.update_loop) 
-        receive_thread.start()
+        self.receive_thread = Thread(target=self.update_loop, daemon=True) 
+        self.receive_thread.start()
 
-        input_thread = Thread(target=self.input_loop) 
-        input_thread.start()
+        self.input_thread = Thread(target=self.input_loop) 
+        self.input_thread.start()
 
     def set_name(self, name):
         if self.room == None:
@@ -100,6 +100,8 @@ class Client():
                 elif cmd[0] == "q":
                     self.conn.root.exposed_leave(self.name, self.room)
                     self.room = None
+
+                    sys.exit()
                 else:
                     print(F"Invalid Command")
 
