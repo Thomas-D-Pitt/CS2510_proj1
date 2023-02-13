@@ -131,7 +131,7 @@ class Client():
                 count += 1
 
             while count <= 10:
-                print(F"{count}. ")
+                print(F". ")
                 count += 1
 
             sleep(1/rate)
