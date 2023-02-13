@@ -165,13 +165,6 @@ class Server():
                 count += 1
             sleep(1/rate)
 
-def with_lock(fn): 
-    def inner(*args, **kwargs):
-        global LOCK
-        with LOCK:
-            val = fn(*args, **kwargs)
-        return val
-
 class Connection(rpc.Service):
 
     def on_connect(self, conn):
@@ -185,58 +178,74 @@ class Connection(rpc.Service):
             except:
                 print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed')
 
-    @with_lock
+
     def exposed_getMessages(self, *args, **kwargs):
-        global SERVER
-        return SERVER.getMessages(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.getMessages(*args, **kwargs)
+        return val
 
-    @with_lock
     def exposed_getChatters(self, *args, **kwargs):
-        global SERVER
-        return SERVER.getChatters(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.getChatters(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_newMessage(self, *args, **kwargs):
-        global SERVER
-        return SERVER.newMessage(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.newMessage(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_availableRooms(self, *args, **kwargs):
-        global SERVER
-        return SERVER.availableRooms(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.availableRooms(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_join(self, user, roomName):
-        global SERVER
-        success = SERVER.join(user, roomName)
+        global SERVER, LOCK
+        with LOCK:
+            success = SERVER.join(user, roomName)
         if success:
             self.clientName = user
             self.clientRoom = roomName
         return success
 
-    @with_lock
+
     def exposed_leave(self, *args, **kwargs):
-        global SERVER
-        success = SERVER.leave(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            success = SERVER.leave(*args, **kwargs)
+        
         if success:
             self.clientName = None
             self.clientRoom = None
         return success
 
-    @with_lock
+
     def exposed_like(self, *args, **kwargs):
-        global SERVER
-        return SERVER.likeMessage(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.likeMessage(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_unlike(self, *args, **kwargs):
-        global SERVER
-        return SERVER.unlikeMessage(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.unlikeMessage(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_getServerInfo(self):
-        global SERVER
-        return str(SERVER)
+        global SERVER, LOCK
+        with LOCK:
+            val = str(SERVER)
+        return val
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")
