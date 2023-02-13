@@ -130,11 +130,31 @@ class Client():
         
 
 def get_args(argv):
+
     parser = argparse.ArgumentParser(description="chat client")
     parser.add_argument('-p', '--port', required=False, default=12000, type=int)
     parser.add_argument('-a', '--address', required=False, default="localhost", type=str)
     return parser.parse_args()
 
 if __name__ == '__main__':
-    args = get_args(sys.argv[1:])
-    client = Client(args.address, args.port)
+    #args = get_args(sys.argv[1:])
+
+    print("connect to server using 'c <address>:<port>'")
+    address = None
+    port = None
+    while address == None or port == None:
+        connectCmd = input()
+        try:
+            args = connectCmd.split(" ", 1)
+            if args[0] != "c":
+                print("you must connect to a server using 'c <address>:<port>'")
+                continue
+
+            args = args[1].split(":", 1)
+            address = args[0]
+            port = int(args[1])
+
+        except:
+            print("invalid command")
+
+    client = Client(address, port)
