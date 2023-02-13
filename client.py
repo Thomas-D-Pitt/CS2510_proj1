@@ -107,7 +107,7 @@ class Client():
                     else:
                         print(F"Invalid Command")
             except Exception as e:
-                print(F'Exception "{e}" raised while processing {raw}')
+                print(F'Exception "{e}" raised while processing "{raw}"')
 
     def update_loop(self):
         rate = 3
