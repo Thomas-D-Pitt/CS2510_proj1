@@ -69,11 +69,15 @@ class Client():
                     if self.room and self.name:
                         self.conn.root.exposed_leave(self.name, self.room)
                         self.room = None
-                        
+
                     self.set_name(cmd[1])
                     print(F"Username set to {cmd[1]}")
 
                 elif cmd[0] == "j":
+                    if self.room and self.name:
+                        self.conn.root.exposed_leave(self.name, self.room)
+                        self.room = None
+
                     if self.join_room(cmd[1]):
                         print(F"joined {cmd[1]}")
 
@@ -124,6 +128,10 @@ class Client():
                     print(F"{count}. {sender}: {msg}\t({likes} Likes)")
                 else:
                     print(F"{count}. {sender}: {msg}")
+                count += 1
+
+            while count <= 10:
+                print(F"{count}. ")
                 count += 1
 
             sleep(1/rate)
