@@ -130,10 +130,6 @@ class Client():
                     print(F"{count}. {sender}: {msg}")
                 count += 1
 
-            while count <= 10:
-                print(F". ")
-                count += 1
-
             sleep(1/rate)
             self.lastContent = newContent[-10:]
             self.displayedMessages = newContent
