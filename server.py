@@ -27,14 +27,18 @@ def write_function(func):
         if type(self) != Server:
             raise Exception("invalid use of write_function decorator")
 
-        receivingServer = kwargs.pop('receivingServer', self.index)
+        receivingServer = int(kwargs.pop('receivingServer', self.index))
         fromOwnLog = kwargs.pop('fromOwnLog', False)
         
-        self.vector_stamp[int(receivingServer)] += 1
+        self.vector_stamp[receivingServer] += 1
         if not fromOwnLog: # save command to disk
-            event_stamp = self.vector_stamp[int(receivingServer)]
+            event_stamp = self.vector_stamp[receivingServer]
             with open(F"server{self.index}_log.txt", "a") as myfile:
-                myfile.write(F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}\n")
+                cmdString = F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}\n"
+                myfile.write(cmdString)
+
+            if receivingServer == self.index:
+                self.serverShareCmd(cmdString)
 
         return func(self, *args, **kwargs)
 
@@ -72,8 +76,17 @@ class Chatroom:
         self.participantHeartbeats[username] = None
         return self.participants.remove(username)
 
-    def newMessage(self, user, message):
-        self.messages.append((len(self.messages), user, message, []))
+    def newMessage(self, user, message, timestamp):
+        data = (len(self.messages), user, message, [], timestamp)
+        done = False
+        for i in range(len(self.messages)):
+            if self.messages[i] > timestamp:
+                self.messages.insert(i, data)
+                done = True
+                break
+
+        if done == False:
+            self.messages.append(data)
 
     def heartbeat(self, user):
         # used for keeping track of last time a user polled chatroom 
@@ -85,34 +98,53 @@ class Chatroom:
 
         if number == -1: # return all messages
             val = []
-            for id, user, message, likes in self.messages:
-                val.append((id, user, message, len(likes)))
+            for id, user, message, likes, _ in self.messages:
+                likeCount = self.sumLikes(likes)
+                val.append((id, user, message, len(likeCount)))
             return val
 
         if len(self.messages) <= number: #asking for more messages than exist, return all existing messages
             val = []
-            for id, user, message, likes in self.messages:
-                val.append((id, user, message, len(likes)))
+            for id, user, message, likes, _ in self.messages:
+                likeCount = self.sumLikes(likes)
+                val.append((id, user, message, len(likeCount)))
             return val
 
         val = [] # return (number) most recent messages
-        for id, user, message, likes in self.messages[-number:]:
-            val.append((id, user, message, len(likes)))
+        for id, user, message, likes, _ in self.messages[-number:]:
+            likeCount = self.sumLikes(likes)
+            val.append((id, user, message, len(likeCount)))
         return val
 
-    def likeMessage(self, user, messageid):
-        if user not in self.messages[messageid][3]:
-            self.messages[messageid][3].append(user)
-            return True
-        else:
-            return False
+    def likeMessage(self, user, messageid, timestamp, value = True):
+        for i in range(len(self.messages[messageid][3])):
+            cUser, cTimestamp, cVal = self.messages[messageid][3][i]
 
-    def unlikeMessage(self, user, messageid):
-        if user in self.messages[messageid][3]:
-            self.messages[messageid][3].remove(user)
-            return True
-        else:
-            return False
+            if user == cUser:
+                if cVal == value: # overwritting existing like with newer timestamp
+                    self.messages[messageid][3][i] = (user, timestamp, value)
+                    return False
+
+                elif cVal != value: # prior removed like
+                    if cTimestamp < timestamp: # new like is more recent than removal
+                        self.messages[messageid][3][i] = (user, timestamp, value)
+                        return True
+                    else:
+                        return False
+
+        self.messages[messageid][3].append((user, timestamp, value))
+        return True
+
+    def unlikeMessage(self, user, messageid, timestamp):
+        # exact same as likeMessage code, just store a different value
+        self.likeMessage(user, messageid, timestamp, value = False)
+
+    def sumLikes(self, likes):
+        sum = 0
+        for _, _, value in likes:
+            if value == True:
+                sum += 1
+        return sum
 
 class Server():
     """
@@ -122,6 +154,7 @@ class Server():
     def __init__(self, index):
         self.index = index
         self.clear_terminal = False
+        self.display_status = False
         self.chatrooms = []
         self.messagesToProcess = {}
         self.vector_stamp = [0 for _ in range(len(SERVER_ADDRESSES.keys()))]
@@ -131,13 +164,12 @@ class Server():
 
         if os.path.isfile(F"server{self.index}_log.txt"):
             self.recoverFromCrash()
-            #print(self.vector_stamp)
 
         receive_thread = Thread(target=self.update_loop, daemon=True) 
         receive_thread.start()
 
-        # for i in range(5):
-        #     self.example_write_func(i, 'b', c = False)
+        entropy_thread = Thread(target=self.anti_entropy, daemon=True) 
+        entropy_thread.start()
         
 
     @write_function
@@ -163,7 +195,7 @@ class Server():
 
             newMessages = conn.root.exposed_getServerData(self.vector_stamp)
             for message in newMessages:
-                processCmdString(message)
+                self.processCmdString(message)
 
     def serverDataGive(self, otherVector):
         # give all info to server that occurred after otherVector
@@ -178,6 +210,14 @@ class Server():
                     filtered_msgs.append(msg)
         return filtered_msgs
 
+    def serverShareCmd(self, cmd):
+        for key, value in SERVER_ADDRESSES.items():
+            if key == self.index: continue
+
+            address, port = value.split(":", 1)
+            conn = rpc.connect(address, port)
+            conn.root.exposed_processCmdString(cmd)
+            
     def processCmdString(self, cmd, fromOwnLog = False):
         # run an RPC that was stored to a string
         receivingServer, event_stamp, func, args, kwargs = cmd.replace("\n", "").split("|")
@@ -193,7 +233,7 @@ class Server():
             for message in self.messagesToProcess[int(receivingServer)]:
                 # try and run other commands waiting to be processed
                 self.messagesToProcess[int(receivingServer)].remove(message)
-                if not processCmdString(message):
+                if not self.processCmdString(message):
                     self.messagesToProcess[int(receivingServer)].append(message)
 
             return True
@@ -206,7 +246,7 @@ class Server():
         # get and process data from other servers
         while True:
             for key in SERVER_ADDRESSES.keys():
-                serverDataGet(key)
+                self.serverDataGet(key)
 
             sleep(1)
 
@@ -220,7 +260,7 @@ class Server():
         return None
 
     @write_function
-    def join(self, user, roomName):
+    def join(self, user, roomName, timeStamp):
         # adds user to chatroom, or creates chatroom if it does not exist 
         if user == None:
             return False
@@ -234,7 +274,7 @@ class Server():
         return newRoom.add_chatter(user)
 
     @write_function
-    def leave(self, user, roomName):
+    def leave(self, user, roomName, timeStamp):
         if user == None:
             return False
 
@@ -248,10 +288,10 @@ class Server():
         return [room.name for room in self.chatrooms]
 
     @write_function
-    def newMessage(self, user, roomName, message):
+    def newMessage(self, user, roomName, message, timeStamp):
         room = self.getRoom(roomName)
         if room and user in room.participants:
-            room.newMessage(user, message)
+            room.newMessage(user, message, timeStamp)
             return True
         else:
             return False
@@ -271,18 +311,18 @@ class Server():
             return None
 
     @write_function
-    def likeMessage(self, user, roomName, messageid):
+    def likeMessage(self, user, roomName, messageid, timeStamp):
         room = self.getRoom(roomName)
         if room and user in room.participants:
-            return room.likeMessage(user, messageid)
+            return room.likeMessage(user, messageid, timeStamp)
         else:
             return False
 
     @write_function
-    def unlikeMessage(self, user, roomName, messageid):
+    def unlikeMessage(self, user, roomName, messageid, timeStamp):
         room = self.getRoom(roomName)
         if room and user in room.participants:
-            return room.unlikeMessage(user, messageid)
+            return room.unlikeMessage(user, messageid, timeStamp)
         else:
             return False
 
@@ -295,11 +335,12 @@ class Server():
         while True:
             if self.clear_terminal:
                 os.system('clear')
-            print(F"Active rooms:")
-            count = 1
-            for room in self.chatrooms:
-                print(F"Room {count}: {room.name}, {len(room.participants)} active users")
-                count += 1
+            if self.display_status:
+                print(F"Active rooms:")
+                count = 1
+                for room in self.chatrooms:
+                    print(F"Room {count}: {room.name}, {len(room.participants)} active users")
+                    count += 1
             sleep(1/rate)
 
 class Connection(rpc.Service):
@@ -317,64 +358,91 @@ class Connection(rpc.Service):
             except:
                 print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed')
 
-    @with_lock
     def exposed_getMessages(self, *args, **kwargs):
-        global SERVER
-        return SERVER.getMessages(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.getMessages(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_getChatters(self, *args, **kwargs):
-        global SERVER
-        return SERVER.getChatters(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.getChatters(*args, **kwargs)
+        return val
 
-    @with_lock
+
+
     def exposed_newMessage(self, *args, **kwargs):
-        global SERVER
-        return SERVER.newMessage(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.newMessage(*args, **kwargs)
+        return val
 
-    @with_lock
+
+
     def exposed_availableRooms(self, *args, **kwargs):
-        global SERVER
-        return SERVER.availableRooms(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.availableRooms(*args, **kwargs)
+        return val
 
-    @with_lock
+
+
     def exposed_join(self, user, roomName):
-        global SERVER
-        success = SERVER.join(user, roomName)
+        global SERVER, LOCK
+        with LOCK:
+            success = SERVER.join(user, roomName)
         if success:
             self.clientName = user
             self.clientRoom = roomName
         return success
 
-    @with_lock
+
     def exposed_leave(self, *args, **kwargs):
-        global SERVER
-        success = SERVER.leave(*args, **kwargs)
-        
+        global SERVER, LOCK
+        with LOCK:
+            success = SERVER.leave(*args, **kwargs)
+
         if success:
             self.clientName = None
             self.clientRoom = None
         return success
 
-    @with_lock
+
     def exposed_like(self, *args, **kwargs):
-        global SERVER
-        SERVER.likeMessage(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.likeMessage(*args, **kwargs)
+        return val
 
-    @with_lock
+
+
     def exposed_unlike(self, *args, **kwargs):
-        global SERVER
-        return SERVER.unlikeMessage(*args, **kwargs)
+        global SERVER, LOCK
+        with LOCK:
+            val = SERVER.unlikeMessage(*args, **kwargs)
+        return val
 
-    @with_lock
+
     def exposed_getServerInfo(self):
-        global SERVER
-        return str(SERVER)
+        global SERVER, LOCK
+        with LOCK:
+            val = str(SERVER)
+        return val
 
-    @with_lock
+
     def exposed_getServerData(self, *args, **kwargs):
         global SERVER
-        return SERVER.serverDataGive(*args, **kwargs)
+        with LOCK:
+            val = SERVER.serverDataGive(*args, **kwargs)
+        return val
+
+    def exposed_processCmdString(self, *args, **kwargs):
+        global SERVER
+        with LOCK:
+            val = SERVER.processCmdString(*args, **kwargs)
+        return val
 
 def get_args(argv):
     parser = argparse.ArgumentParser(description="chat server")

@@ -1,21 +1,27 @@
 import sys, argparse, os
+from datetime import datetime
 from threading import Thread
 from time import sleep
 import rpyc as rpc
 
+SERVER_ADDRESSES = {
+    0 : "172.30.100.101:12000",
+    1 : "172.30.100.102:12000",
+    2 : "172.30.100.103:12000",
+    3 : "172.30.100.104:12000",
+    4 : "172.30.100.105:12000"
+}
+
 class Client():
     
-    def __init__(self, address, port):
+    def __init__(self):
         self.name = None
         self.room = None
         self.lastContent = None
         self.lastChatters = None
         self.displayedMessages = None
         self.fetchAll = False
-        self.conn = rpc.connect(address, port)
-        
-        print("Available Rooms:", self.get_available_rooms())
-
+        self.conn = None
 
         self.receive_thread = Thread(target=self.update_loop, daemon=True) # infinite loop to update screen
         self.receive_thread.start()
@@ -23,15 +29,29 @@ class Client():
         self.input_thread = Thread(target=self.input_loop) # infinite loop to receive user input
         self.input_thread.start()
 
+    def connect(self, arg):
+        if self.conn:
+            if self.conn:
+                self.conn.root.exposed_leave(self.name, self.room)
+                self.room = None
+
+        if ":" in arg:
+            address, port = arg.split(":", 1)
+        else:
+            address, port = SERVER_ADDRESSES[int(arg) - 1].split(":", 1)
+
+        self.conn = rpc.connect(address, port)
+        print("Available Rooms:", self.get_available_rooms())
+
     def set_name(self, name):
         if self.room == None:
             self.name = name
         else:
-            self.conn.root.exposed_leave(self.name, self.room)
+            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
             self.name = name
 
     def join_room(self, room):
-        if self.conn.root.exposed_join(self.name, room):
+        if self.conn.root.exposed_join(self.name, room, datetime.now()):
             self.room = room
             return True
         else:
@@ -42,7 +62,7 @@ class Client():
         return self.conn.root.exposed_availableRooms()
 
     def send_message(self, message):
-        if self.conn.root.exposed_newMessage(self.name, self.room, message):
+        if self.conn.root.exposed_newMessage(self.name, self.room, message, datetime.now()):
             return True
         else:
             print("Error sending message")
@@ -69,7 +89,7 @@ class Client():
                         self.send_message(cmd[1])
 
                     elif cmd[0] == "u": #set username
-                        if self.room and self.name:
+                        if self.room and self.name and self.conn:
                             self.conn.root.exposed_leave(self.name, self.room)
                             self.room = None
 
@@ -77,7 +97,7 @@ class Client():
                         print(F"Username set to {cmd[1]}")
 
                     elif cmd[0] == "j": #join chatroom
-                        if self.room and self.name:
+                        if self.room and self.name and self.conn:
                             self.conn.root.exposed_leave(self.name, self.room)
                             self.room = None
 
@@ -85,14 +105,17 @@ class Client():
                             print(F"joined {cmd[1]}")
 
                     elif cmd[0] == "l": #like message
-                        if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
+                        if  self.conn and self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
                             messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                            self.conn.root.exposed_like(self.name, self.room, messageid)
+                            self.conn.root.exposed_like(self.name, self.room, messageid, datetime.now())
 
                     elif cmd[0] == "r": #remove message like
-                        if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
+                        if self.conn and self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
                             messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                            self.conn.root.exposed_unlike(self.name, self.room, messageid)
+                            self.conn.root.exposed_unlike(self.name, self.room, messageid, datetime.now())
+
+                    elif cmd[0] == "c": # connect to server
+                        self.connect(cmd[1])
 
                     else:
                         print(F"Unknown command: {cmd[0]}")
@@ -101,7 +124,8 @@ class Client():
                         self.fetchAll = True
                         self.lastContent = None
                     elif cmd[0] == "q": #quit
-                        self.conn.root.exposed_leave(self.name, self.room)
+                        if self.conn:
+                            self.conn.root.exposed_leave(self.name, self.room)
                         self.room = None
                         os.system('clear')
                         sys.exit()
@@ -115,6 +139,9 @@ class Client():
         os.system('clear')
         print("Chat program started...")
         while True:
+            if not self.conn:
+                sleep(1/rate)
+                continue
 
             newContent = self.get_messages()
 
@@ -159,21 +186,6 @@ if __name__ == '__main__':
     print("suggested: c localhost:12000")
     address = None
     port = None
-    while address == None or port == None:
-        # poll for input until valid address:port is given
-        connectCmd = input()
-        try:
-            args = connectCmd.split(" ", 1)
-            if args[0] != "c":
-                print("you must connect to a server using 'c <address>:<port>'")
-                continue
-
-            args = args[1].split(":", 1)
-            address = args[0]
-            port = int(args[1])
-
-        except:
-            print("invalid command")
 
     # start client after connecting to server
-    client = Client(address, port)
+    client = Client()
