@@ -16,10 +16,11 @@ class Client():
         
         print("Available Rooms:", self.get_available_rooms())
 
-        self.receive_thread = Thread(target=self.update_loop, daemon=True) 
+
+        self.receive_thread = Thread(target=self.update_loop, daemon=True) # infinite loop to update screen
         self.receive_thread.start()
 
-        self.input_thread = Thread(target=self.input_loop) 
+        self.input_thread = Thread(target=self.input_loop) # infinite loop to receive user input
         self.input_thread.start()
 
     def set_name(self, name):
@@ -62,12 +63,12 @@ class Client():
             try:
                 raw = input("")
                 cmd = raw.split(" ", 1)
-                if len(cmd) == 2:
+                if len(cmd) == 2: # commands with arguments
 
-                    if cmd[0] == "a":
+                    if cmd[0] == "a": #append message
                         self.send_message(cmd[1])
 
-                    elif cmd[0] == "u":
+                    elif cmd[0] == "u": #set username
                         if self.room and self.name:
                             self.conn.root.exposed_leave(self.name, self.room)
                             self.room = None
@@ -75,7 +76,7 @@ class Client():
                         self.set_name(cmd[1])
                         print(F"Username set to {cmd[1]}")
 
-                    elif cmd[0] == "j":
+                    elif cmd[0] == "j": #join chatroom
                         if self.room and self.name:
                             self.conn.root.exposed_leave(self.name, self.room)
                             self.room = None
@@ -83,23 +84,23 @@ class Client():
                         if self.join_room(cmd[1]):
                             print(F"joined {cmd[1]}")
 
-                    elif cmd[0] == "l":
+                    elif cmd[0] == "l": #like message
                         if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
                             messageid = self.displayedMessages[int(cmd[1]) - 1][0]
                             self.conn.root.exposed_like(self.name, self.room, messageid)
 
-                    elif cmd[0] == "r":
+                    elif cmd[0] == "r": #remove message like
                         if self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
                             messageid = self.displayedMessages[int(cmd[1]) - 1][0]
                             self.conn.root.exposed_unlike(self.name, self.room, messageid)
 
                     else:
                         print(F"Unknown command: {cmd[0]}")
-                else:
-                    if cmd[0] == "p":
+                else: # commands with no arguments
+                    if cmd[0] == "p": #print past messages
                         self.fetchAll = True
                         self.lastContent = None
-                    elif cmd[0] == "q":
+                    elif cmd[0] == "q": #quit
                         self.conn.root.exposed_leave(self.name, self.room)
                         self.room = None
                         os.system('clear')
@@ -122,10 +123,11 @@ class Client():
             newChatters = self.get_chatters(self.room)
 
             if newContent == self.lastContent and str(newChatters) == str(self.lastChatters):
+                # if nothing has changed server-side do nothing
                 sleep(0.5/rate)
                 continue
             
-            
+            # if there are changes...
             os.system('clear')
             count = 1
             print(F"Group: {self.room} \nParticipants:{newChatters}")
@@ -158,6 +160,7 @@ if __name__ == '__main__':
     address = None
     port = None
     while address == None or port == None:
+        # poll for input until valid address:port is given
         connectCmd = input()
         try:
             args = connectCmd.split(" ", 1)
@@ -172,4 +175,5 @@ if __name__ == '__main__':
         except:
             print("invalid command")
 
+    # start client after connecting to server
     client = Client(address, port)
