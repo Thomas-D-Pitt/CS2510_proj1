@@ -30,10 +30,7 @@ class Client():
         self.input_thread.start()
 
     def connect(self, arg):
-        if self.conn:
-            if self.conn:
-                self.conn.root.exposed_leave(self.name, self.room)
-                self.room = None
+        self.disconnect()
 
         if ":" in arg:
             address, port = arg.split(":", 1)
@@ -42,6 +39,13 @@ class Client():
 
         self.conn = rpc.connect(address, port)
         print("Available Rooms:", self.get_available_rooms())
+
+    def disconnect(self):
+        if self.conn:
+            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
+        self.room = None
+        #os.system('clear')
+        
 
     def set_name(self, name):
         if self.room == None:
@@ -90,7 +94,7 @@ class Client():
 
                     elif cmd[0] == "u": #set username
                         if self.room and self.name and self.conn:
-                            self.conn.root.exposed_leave(self.name, self.room)
+                            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
                             self.room = None
 
                         self.set_name(cmd[1])
@@ -98,7 +102,7 @@ class Client():
 
                     elif cmd[0] == "j": #join chatroom
                         if self.room and self.name and self.conn:
-                            self.conn.root.exposed_leave(self.name, self.room)
+                            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
                             self.room = None
 
                         if self.join_room(cmd[1]):
@@ -124,10 +128,7 @@ class Client():
                         self.fetchAll = True
                         self.lastContent = None
                     elif cmd[0] == "q": #quit
-                        if self.conn:
-                            self.conn.root.exposed_leave(self.name, self.room)
-                        self.room = None
-                        os.system('clear')
+                        self.disconnect()
                         sys.exit()
                     else:
                         print(F"Invalid Command")
@@ -138,6 +139,8 @@ class Client():
         rate = 3
         os.system('clear')
         print("Chat program started...")
+        print("connect to server using 'c <address>:<port>'")
+        print("suggested: c <1-5>")
         while True:
             if not self.conn:
                 sleep(1/rate)
@@ -182,8 +185,7 @@ def get_args(argv):
 if __name__ == '__main__':
     #args = get_args(sys.argv[1:])
 
-    print("connect to server using 'c <address>:<port>'")
-    print("suggested: c localhost:12000")
+    
     address = None
     port = None
 

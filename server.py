@@ -3,6 +3,7 @@ import rpyc as rpc
 from threading import Thread, Lock
 from time import sleep, time
 from rpyc.utils.server import ThreadedServer
+import datetime
 
 SERVER_ADDRESSES = {
     0 : "172.30.100.101:12000",
@@ -23,12 +24,16 @@ def with_lock(func):
 def write_function(func):
     # Handles all of the additional code that should be run for each write to the server
     def inner(self, *args, **kwargs):
+
+        
         
         if type(self) != Server:
             raise Exception("invalid use of write_function decorator")
 
         receivingServer = int(kwargs.pop('receivingServer', self.index))
         fromOwnLog = kwargs.pop('fromOwnLog', False)
+
+        
         
         self.vector_stamp[receivingServer] += 1
         if not fromOwnLog: # save command to disk
@@ -37,8 +42,12 @@ def write_function(func):
                 cmdString = F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}\n"
                 myfile.write(cmdString)
 
+            print(F"Write function Called: {receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}")
+
             if receivingServer == self.index:
-                self.serverShareCmd(cmdString)
+                t = Thread(target = self.serverShareCmd, args = [cmdString], daemon=True)
+                t.start()
+                #self.serverShareCmd(cmdString)
 
         return func(self, *args, **kwargs)
 
@@ -63,7 +72,7 @@ class Chatroom:
             sleep(timeout)
             now = time()
             for user in self.participants:
-                if self.participantHeartbeats[user] - now > timeout:
+                if self.participantHeartbeats[user] and self.participantHeartbeats[user] - now > timeout:
                     self.remove_chatter(user)
 
     def add_chatter(self, username):
@@ -74,13 +83,17 @@ class Chatroom:
 
     def remove_chatter(self, username):
         self.participantHeartbeats[username] = None
-        return self.participants.remove(username)
+        if username in self.participants:
+            return self.participants.remove(username)
+        return False
 
     def newMessage(self, user, message, timestamp):
+        timestamp = datetime.datetime.strptime(str(timestamp), '%Y-%m-%d %H:%M:%S.%f')
+
         data = (len(self.messages), user, message, [], timestamp)
         done = False
         for i in range(len(self.messages)):
-            if self.messages[i] > timestamp:
+            if self.messages[i][4] > timestamp:
                 self.messages.insert(i, data)
                 done = True
                 break
@@ -100,20 +113,20 @@ class Chatroom:
             val = []
             for id, user, message, likes, _ in self.messages:
                 likeCount = self.sumLikes(likes)
-                val.append((id, user, message, len(likeCount)))
+                val.append((id, user, message, likeCount))
             return val
 
         if len(self.messages) <= number: #asking for more messages than exist, return all existing messages
             val = []
             for id, user, message, likes, _ in self.messages:
                 likeCount = self.sumLikes(likes)
-                val.append((id, user, message, len(likeCount)))
+                val.append((id, user, message, likeCount))
             return val
 
         val = [] # return (number) most recent messages
         for id, user, message, likes, _ in self.messages[-number:]:
             likeCount = self.sumLikes(likes)
-            val.append((id, user, message, len(likeCount)))
+            val.append((id, user, message, likeCount))
         return val
 
     def likeMessage(self, user, messageid, timestamp, value = True):
@@ -194,8 +207,11 @@ class Server():
             conn = rpc.connect(address, port)
 
             newMessages = conn.root.exposed_getServerData(self.vector_stamp)
+            
             for message in newMessages:
                 self.processCmdString(message)
+            conn.close()
+            
 
     def serverDataGive(self, otherVector):
         # give all info to server that occurred after otherVector
@@ -212,11 +228,20 @@ class Server():
 
     def serverShareCmd(self, cmd):
         for key, value in SERVER_ADDRESSES.items():
-            if key == self.index: continue
+            t = Thread(target = self._serverShareCmdHelper, args = [key, value, cmd])
+            t.start()
+
+    def _serverShareCmdHelper(self, key, value, cmd):
+        try:
+            if key == self.index: return
 
             address, port = value.split(":", 1)
             conn = rpc.connect(address, port)
             conn.root.exposed_processCmdString(cmd)
+            conn.close()
+        except Exception as e:
+            print(F"Error in serverShareCmd on {key}: {e}")
+
             
     def processCmdString(self, cmd, fromOwnLog = False):
         # run an RPC that was stored to a string
@@ -244,9 +269,14 @@ class Server():
 
     def anti_entropy(self):
         # get and process data from other servers
+        #return
+        sleep(1)
         while True:
             for key in SERVER_ADDRESSES.keys():
-                self.serverDataGet(key)
+                try:
+                    self.serverDataGet(key)
+                except Exception as e:
+                    print(F"Error in anti-entropy on {key}: {e}")
 
             sleep(1)
 
@@ -279,8 +309,8 @@ class Server():
             return False
 
         room = self.getRoom(roomName)
-        if room:
-            return room.remove_chatter(user)
+        if room :
+                return room.remove_chatter(user)
 
         return False
 
@@ -354,7 +384,7 @@ class Connection(rpc.Service):
     def on_disconnect(self, conn):
         if self.clientName and self.clientRoom:
             try:
-                SERVER.leave(self.clientName, self.clientRoom)
+                SERVER.leave(self.clientName, self.clientRoom, datetime.now())
             except:
                 print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed')
 
@@ -389,13 +419,13 @@ class Connection(rpc.Service):
 
 
 
-    def exposed_join(self, user, roomName):
+    def exposed_join(self, *args, **kwargs):
         global SERVER, LOCK
         with LOCK:
-            success = SERVER.join(user, roomName)
+            success = SERVER.join(*args, **kwargs) 
         if success:
-            self.clientName = user
-            self.clientRoom = roomName
+            self.clientName = args[0]
+            self.clientRoom = args[1]
         return success
 
 
