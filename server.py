@@ -5,6 +5,8 @@ from time import sleep, time
 from rpyc.utils.server import ThreadedServer
 import datetime
 
+DEBUG_MESSAGES = ["anti_entropy"]
+
 SERVER_ADDRESSES = {
     0 : "172.30.100.101:12000",
     1 : "172.30.100.102:12000",
@@ -14,18 +16,12 @@ SERVER_ADDRESSES = {
 }
 
 ### Decorator functions ###
-def with_lock(func):
-    def inner(*args, **kwargs):
-        global LOCK
-        with LOCK:
-            result = func(*args, **kwargs)
-        return result
-        
 def write_function(func):
     # Handles all of the additional code that should be run for each write to the server
     def inner(self, *args, **kwargs):
 
-        
+        if "write_function" in DEBUG_MESSAGES:
+            print(F"write function: {func.__name__}")
         
         if type(self) != Server:
             raise Exception("invalid use of write_function decorator")
@@ -33,14 +29,21 @@ def write_function(func):
         receivingServer = int(kwargs.pop('receivingServer', self.index))
         fromOwnLog = kwargs.pop('fromOwnLog', False)
 
-        
+        if "write_function" in DEBUG_MESSAGES:
+            print(F"write function: {func.__name__} step 2")
         
         self.vector_stamp[receivingServer] += 1
         if not fromOwnLog: # save command to disk
+            if "write_function" in DEBUG_MESSAGES:
+                print(F"write function: {func.__name__} step 3")
+
             event_stamp = self.vector_stamp[receivingServer]
             with open(F"server{self.index}_log.txt", "a") as myfile:
                 cmdString = F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}\n"
                 myfile.write(cmdString)
+
+            if "write_function" in DEBUG_MESSAGES:
+                print(F"write function: {func.__name__} step 4")
 
             print(F"Write function Called: {receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}")
 
@@ -48,6 +51,9 @@ def write_function(func):
                 t = Thread(target = self.serverShareCmd, args = [cmdString], daemon=True)
                 t.start()
                 #self.serverShareCmd(cmdString)
+
+        if "write_function" in DEBUG_MESSAGES:
+            print(F"write function: {func.__name__} step 5")
 
         return func(self, *args, **kwargs)
 
@@ -181,8 +187,9 @@ class Server():
         receive_thread = Thread(target=self.update_loop, daemon=True) 
         receive_thread.start()
 
-        entropy_thread = Thread(target=self.anti_entropy, daemon=True) 
-        entropy_thread.start()
+        for key in SERVER_ADDRESSES.keys():
+            entropy_thread = Thread(target=self.anti_entropy, daemon=True, args=[key]) 
+            entropy_thread.start()
         
 
     @write_function
@@ -210,8 +217,7 @@ class Server():
             
             for message in newMessages:
                 self.processCmdString(message)
-            conn.close()
-            
+            conn.close()            
 
     def serverDataGive(self, otherVector):
         # give all info to server that occurred after otherVector
@@ -243,7 +249,8 @@ class Server():
             print(F"Error in serverShareCmd on {key}: {e}")
 
             
-    def processCmdString(self, cmd, fromOwnLog = False):
+    def processCmdString(self, cmd, fromOwnLog = False, depth = 0):
+        print("processing cmd", depth)
         # run an RPC that was stored to a string
         receivingServer, event_stamp, func, args, kwargs = cmd.replace("\n", "").split("|")
 
@@ -255,11 +262,16 @@ class Server():
             func = getattr(self, func)
             func(*args, **kwargs, receivingServer = receivingServer, fromOwnLog = fromOwnLog)
 
-            for message in self.messagesToProcess[int(receivingServer)]:
+            messagesToStillProcess = []
+            messagesToProcess = self.messagesToProcess
+            for message in messagesToProcess[int(receivingServer)]:
+                
                 # try and run other commands waiting to be processed
                 self.messagesToProcess[int(receivingServer)].remove(message)
-                if not self.processCmdString(message):
-                    self.messagesToProcess[int(receivingServer)].append(message)
+                if not self.processCmdString(message, depth = depth+1):
+                    messagesToStillProcess.append(message)
+
+            self.messagesToProcess[int(receivingServer)] = messagesToStillProcess
 
             return True
 
@@ -267,16 +279,17 @@ class Server():
             self.messagesToProcess[int(receivingServer)].append(cmd)
             return False
 
-    def anti_entropy(self):
+    def anti_entropy(self, key):
         # get and process data from other servers
         #return
         sleep(1)
         while True:
-            for key in SERVER_ADDRESSES.keys():
-                try:
-                    self.serverDataGet(key)
-                except Exception as e:
-                    print(F"Error in anti-entropy on {key}: {e}")
+            try:
+                self.serverDataGet(key)
+                if "anti_entropy" in DEBUG_MESSAGES:
+                    print(F"got info from server {int(key) + 1}")
+            except Exception as e:
+                print(F"Error in anti-entropy on {key}: {e}")
 
             sleep(1)
 
@@ -291,14 +304,20 @@ class Server():
 
     @write_function
     def join(self, user, roomName, timeStamp):
+        if "join" in DEBUG_MESSAGES:
+            print(F"{user} joining server")
         # adds user to chatroom, or creates chatroom if it does not exist 
         if user == None:
             return False
 
         room = self.getRoom(roomName)
         if room:
+            if "join" in DEBUG_MESSAGES:
+                print(F"{roomName} exists, adding user")
             return room.add_chatter(user)
-            
+        
+        if "join" in DEBUG_MESSAGES:
+            print(F"{roomName} does not exist, making room")
         newRoom = Chatroom(roomName)
         self.chatrooms.append(newRoom)
         return newRoom.add_chatter(user)
@@ -384,94 +403,193 @@ class Connection(rpc.Service):
     def on_disconnect(self, conn):
         if self.clientName and self.clientRoom:
             try:
-                SERVER.leave(self.clientName, self.clientRoom, datetime.now())
-            except:
-                print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed')
+                SERVER.leave(self.clientName, self.clientRoom, datetime.datetime.now())
+            except Exception as e:
+                print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed eith exception: {e}')
 
     def exposed_getMessages(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("getMessages acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by getMessages")
             val = SERVER.getMessages(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("getMessages released lock")
+
         return val
 
 
     def exposed_getChatters(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("getChatters acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by getChatters")
             val = SERVER.getChatters(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("getChatters released lock")
+
         return val
 
 
 
     def exposed_newMessage(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("newMessage acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by newMessage")
             val = SERVER.newMessage(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("newMessage released lock")
+
         return val
 
 
 
     def exposed_availableRooms(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("availableRooms acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by availableRooms")
             val = SERVER.availableRooms(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("availableRooms released lock")
+
         return val
 
 
 
     def exposed_join(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("join acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by join")
             success = SERVER.join(*args, **kwargs) 
         if success:
             self.clientName = args[0]
             self.clientRoom = args[1]
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("join released lock")
+        
         return success
 
 
     def exposed_leave(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("leave acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by leave")
             success = SERVER.leave(*args, **kwargs)
 
         if success:
             self.clientName = None
             self.clientRoom = None
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("leave released lock")
+
         return success
 
 
     def exposed_like(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("like acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by like")
             val = SERVER.likeMessage(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("like released lock")
+
         return val
 
 
 
     def exposed_unlike(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("unlike acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by unlike")
             val = SERVER.unlikeMessage(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("unlike released lock")
+
         return val
 
 
     def exposed_getServerInfo(self):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("serverInfo acquiring lock")
+
         global SERVER, LOCK
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by serverInfo")
             val = str(SERVER)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("serverInfo released lock")
+
         return val
 
 
     def exposed_getServerData(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("serverData acquiring lock")
+
         global SERVER
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by serverData")
             val = SERVER.serverDataGive(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("serverData released lock")
+
         return val
 
     def exposed_processCmdString(self, *args, **kwargs):
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("processCMD acquiring lock")
+
         global SERVER
         with LOCK:
+            if "deadlock_test" in DEBUG_MESSAGES:
+                print("lock acquired by processCMD")
             val = SERVER.processCmdString(*args, **kwargs)
+
+        if "deadlock_test" in DEBUG_MESSAGES:
+            print("processCMD released lock")
+
         return val
 
 def get_args(argv):

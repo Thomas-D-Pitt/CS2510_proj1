@@ -1,6 +1,6 @@
 import sys, argparse, os
 from datetime import datetime
-from threading import Thread
+from threading import Thread, Lock
 from time import sleep
 import rpyc as rpc
 
@@ -12,9 +12,18 @@ SERVER_ADDRESSES = {
     4 : "172.30.100.105:12000"
 }
 
+def with_lock(func):
+    def inner(*args, **kwargs):
+        global LOCK
+        with LOCK:
+            result = func(*args, **kwargs)
+        return result
+    
+    return inner
+
 class Client():
     
-    def __init__(self):
+    def __init__(self, restart = False):
         self.name = None
         self.room = None
         self.lastContent = None
@@ -22,31 +31,42 @@ class Client():
         self.displayedMessages = None
         self.fetchAll = False
         self.conn = None
+        self.serverid = None
 
-        self.receive_thread = Thread(target=self.update_loop, daemon=True) # infinite loop to update screen
+        self.receive_thread = Thread(target=self.update_loop, daemon=True, args=[restart]) # infinite loop to update screen
         self.receive_thread.start()
 
-        self.input_thread = Thread(target=self.input_loop) # infinite loop to receive user input
-        self.input_thread.start()
+        # self.input_thread = Thread(target=self.input_loop) # infinite loop to receive user input
+        # self.input_thread.start()
 
+
+    @with_lock
     def connect(self, arg):
+        if len(arg) == 0 or arg == None:
+            print("cannot connect to 'None'")
+            return False
         self.disconnect()
-
+    
         if ":" in arg:
             address, port = arg.split(":", 1)
         else:
             address, port = SERVER_ADDRESSES[int(arg) - 1].split(":", 1)
 
         self.conn = rpc.connect(address, port)
+        self.serverid = str(arg)
+        os.system('clear')
+        print(F"SERVER: {self.serverid}")
         print("Available Rooms:", self.get_available_rooms())
 
+    
     def disconnect(self):
         if self.conn:
             self.conn.root.exposed_leave(self.name, self.room, datetime.now())
+            self.conn = None
         self.room = None
         #os.system('clear')
         
-
+    @with_lock
     def set_name(self, name):
         if self.room == None:
             self.name = name
@@ -54,7 +74,11 @@ class Client():
             self.conn.root.exposed_leave(self.name, self.room, datetime.now())
             self.name = name
 
+    @with_lock
     def join_room(self, room):
+        if self.name == None:
+            print("You must select a name first")
+            return False
         if self.conn.root.exposed_join(self.name, room, datetime.now()):
             self.room = room
             return True
@@ -65,12 +89,14 @@ class Client():
     def get_available_rooms(self):
         return self.conn.root.exposed_availableRooms()
 
+    @with_lock
     def send_message(self, message):
         if self.conn.root.exposed_newMessage(self.name, self.room, message, datetime.now()):
             return True
         else:
             print("Error sending message")
             return False
+
 
     def get_chatters(self, room):
         return self.conn.root.exposed_getChatters(room)
@@ -80,6 +106,24 @@ class Client():
             self.fetchAll = False
             return self.conn.root.exposed_getMessages(self.name, self.room, -1)
         return self.conn.root.exposed_getMessages(self.name, self.room)
+    
+    @with_lock
+    def leave(self):
+        if self.room and self.name and self.conn:
+            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
+            self.room = None
+
+    @with_lock
+    def like(self, index):
+        if  self.conn and self.displayedMessages and len(self.displayedMessages) > int(index) - 1:
+            messageid = self.displayedMessages[int(index) - 1][0]
+            self.conn.root.exposed_like(self.name, self.room, messageid, datetime.now())
+
+    @with_lock
+    def unlike(self, index):
+        if self.conn and self.displayedMessages and len(self.displayedMessages) > int(index) - 1:
+            messageid = self.displayedMessages[int(index) - 1][0]
+            self.conn.root.exposed_unlike(self.name, self.room, messageid, datetime.now())
 
     def input_loop(self):
         sleep(.1)
@@ -93,33 +137,28 @@ class Client():
                         self.send_message(cmd[1])
 
                     elif cmd[0] == "u": #set username
-                        if self.room and self.name and self.conn:
-                            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
-                            self.room = None
+                        self.leave()
 
                         self.set_name(cmd[1])
                         print(F"Username set to {cmd[1]}")
 
                     elif cmd[0] == "j": #join chatroom
-                        if self.room and self.name and self.conn:
-                            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
-                            self.room = None
+                        self.leave()
 
                         if self.join_room(cmd[1]):
                             print(F"joined {cmd[1]}")
 
                     elif cmd[0] == "l": #like message
-                        if  self.conn and self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
-                            messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                            self.conn.root.exposed_like(self.name, self.room, messageid, datetime.now())
+                        self.like(cmd[1])
 
                     elif cmd[0] == "r": #remove message like
-                        if self.conn and self.displayedMessages and len(self.displayedMessages) > int(cmd[1]) - 1:
-                            messageid = self.displayedMessages[int(cmd[1]) - 1][0]
-                            self.conn.root.exposed_unlike(self.name, self.room, messageid, datetime.now())
+                        self.unlike(cmd[1])
 
                     elif cmd[0] == "c": # connect to server
-                        self.connect(cmd[1])
+                        try:
+                            self.connect(cmd[1])
+                        except OSError as e:
+                            print(F"Error while connecting to server: {e}")
 
                     else:
                         print(F"Unknown command: {cmd[0]}")
@@ -132,46 +171,53 @@ class Client():
                         sys.exit()
                     else:
                         print(F"Invalid Command")
-            except Exception as e:
+            except FileNotFoundError as e:
                 print(F'Exception "{e}" raised while processing "{raw}"')
 
-    def update_loop(self):
+    def update_loop(self, restart = False):
+        global LOCK
         rate = 3
         os.system('clear')
+        if restart:
+            print("client disconnected, please reconnect")
         print("Chat program started...")
         print("connect to server using 'c <address>:<port>'")
         print("suggested: c <1-5>")
         while True:
-            if not self.conn:
-                sleep(1/rate)
-                continue
-
-            newContent = self.get_messages()
-
-            if newContent == None: newContent = []
-
-            newChatters = self.get_chatters(self.room)
-
-            if newContent == self.lastContent and str(newChatters) == str(self.lastChatters):
-                # if nothing has changed server-side do nothing
-                sleep(0.5/rate)
+            sleepTime = 1
+            if not self.conn or not self.room:
+                sleep(sleepTime/rate)
                 continue
             
-            # if there are changes...
-            os.system('clear')
-            count = 1
-            print(F"Group: {self.room} \nParticipants:{newChatters}")
-            for id, sender, msg, likes in newContent:
-                if likes != 0:
-                    print(F"{count}. {sender}: {msg}\t({likes} Likes)")
-                else:
-                    print(F"{count}. {sender}: {msg}")
-                count += 1
+            with LOCK:
+                newContent = self.get_messages()
 
-            sleep(1/rate)
-            self.lastContent = newContent[-10:]
-            self.displayedMessages = newContent
-            self.lastChatters = str(newChatters)
+                if newContent == None: newContent = []
+
+                newChatters = self.get_chatters(self.room)
+
+                if newContent == self.lastContent and str(newChatters) == str(self.lastChatters):
+                    sleepTime = 0.5
+                
+                else:
+                    # if there are changes...
+                    os.system('clear')
+                    count = 1
+                    print(F"SERVER: {self.serverid}")
+                    print(F"Group: {self.room} \nParticipants:{newChatters}")
+                    for id, sender, msg, likes in newContent:
+                        if likes != 0:
+                            print(F"{count}. {sender}: {msg}\t({likes} Likes)")
+                        else:
+                            print(F"{count}. {sender}: {msg}")
+                        count += 1
+
+                    self.lastContent = newContent[-10:]
+                    self.displayedMessages = newContent
+                    self.lastChatters = str(newChatters)
+
+            sleep(sleepTime/rate)
+            
             
         
 
@@ -184,10 +230,20 @@ def get_args(argv):
 
 if __name__ == '__main__':
     #args = get_args(sys.argv[1:])
-
+    global LOCK
+    LOCK = Lock()
     
     address = None
     port = None
 
     # start client after connecting to server
-    client = Client()
+    restart = False
+    while True:
+        try:
+            client = Client(restart)
+            client.input_loop()
+        except EOFError:
+            restart = True
+            print("client disconnected, please reconnect")
+
+        
