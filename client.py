@@ -55,8 +55,14 @@ class Client():
         self.conn = rpc.connect(address, port)
         self.serverid = str(arg)
         os.system('clear')
+        print(F"connecting to {self.serverid}")
+        os.system('clear')
         print(F"SERVER: {self.serverid}")
-        print("Available Rooms:", self.get_available_rooms())
+        try:
+            _ = self.get_available_rooms()
+            print("connected")
+        except Exception as e:
+            print(F"error connecting: {e}")
 
     
     def disconnect(self):
@@ -207,9 +213,9 @@ class Client():
                     print(F"Group: {self.room} \nParticipants:{newChatters}")
                     for id, sender, msg, likes in newContent:
                         if likes != 0:
-                            print(F"{count}. {sender}: {msg}\t({likes} Likes)")
+                            print(F"[{id}] {count}. {sender}: {msg}\t({likes} Likes)")
                         else:
-                            print(F"{count}. {sender}: {msg}")
+                            print(F"[{id}] {count}. {sender}: {msg}")
                         count += 1
 
                     self.lastContent = newContent[-10:]

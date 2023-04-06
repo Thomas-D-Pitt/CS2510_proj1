@@ -5,7 +5,7 @@ from time import sleep, time
 from rpyc.utils.server import ThreadedServer
 import datetime
 
-DEBUG_MESSAGES = ["anti_entropy"]
+DEBUG_MESSAGES = ["processing_cmd"]
 
 SERVER_ADDRESSES = {
     0 : "172.30.100.101:12000",
@@ -28,22 +28,14 @@ def write_function(func):
 
         receivingServer = int(kwargs.pop('receivingServer', self.index))
         fromOwnLog = kwargs.pop('fromOwnLog', False)
-
-        if "write_function" in DEBUG_MESSAGES:
-            print(F"write function: {func.__name__} step 2")
         
         self.vector_stamp[receivingServer] += 1
         if not fromOwnLog: # save command to disk
-            if "write_function" in DEBUG_MESSAGES:
-                print(F"write function: {func.__name__} step 3")
 
             event_stamp = self.vector_stamp[receivingServer]
             with open(F"server{self.index}_log.txt", "a") as myfile:
                 cmdString = F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}\n"
                 myfile.write(cmdString)
-
-            if "write_function" in DEBUG_MESSAGES:
-                print(F"write function: {func.__name__} step 4")
 
             print(F"Write function Called: {receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}")
 
@@ -51,9 +43,6 @@ def write_function(func):
                 t = Thread(target = self.serverShareCmd, args = [cmdString], daemon=True)
                 t.start()
                 #self.serverShareCmd(cmdString)
-
-        if "write_function" in DEBUG_MESSAGES:
-            print(F"write function: {func.__name__} step 5")
 
         return func(self, *args, **kwargs)
 
@@ -68,14 +57,17 @@ class Chatroom:
         self.messages = []
         self.name = name
 
-        purge_thread = Thread(target=self.purge) 
+        purge_thread = Thread(target=self.purge, daemon=True) 
         purge_thread.start()
 
     def purge(self):
         # Removes inactive users from chatroom as determined by last heartbeat
-        timeout = 10
+        timeout = 1
         while True:
             sleep(timeout)
+            for key, value in self.participantHeartbeats.items():
+                if value:
+                    print(F"{key} last update: {value - time()}")
             now = time()
             for user in self.participants:
                 if self.participantHeartbeats[user] and self.participantHeartbeats[user] - now > timeout:
@@ -93,10 +85,10 @@ class Chatroom:
             return self.participants.remove(username)
         return False
 
-    def newMessage(self, user, message, timestamp):
+    def newMessage(self, user, message, timestamp, messageid):
         timestamp = datetime.datetime.strptime(str(timestamp), '%Y-%m-%d %H:%M:%S.%f')
 
-        data = (len(self.messages), user, message, [], timestamp)
+        data = [messageid, user, message, [], timestamp]
         done = False
         for i in range(len(self.messages)):
             if self.messages[i][4] > timestamp:
@@ -136,22 +128,23 @@ class Chatroom:
         return val
 
     def likeMessage(self, user, messageid, timestamp, value = True):
-        for i in range(len(self.messages[messageid][3])):
-            cUser, cTimestamp, cVal = self.messages[messageid][3][i]
+        msg = self.getMessageByID(messageid)
+        for i in range(len(msg[3])):
+            cUser, cTimestamp, cVal = msg[3][i]
 
             if user == cUser:
                 if cVal == value: # overwritting existing like with newer timestamp
-                    self.messages[messageid][3][i] = (user, timestamp, value)
+                    msg[3][i] = (user, timestamp, value)
                     return False
 
                 elif cVal != value: # prior removed like
                     if cTimestamp < timestamp: # new like is more recent than removal
-                        self.messages[messageid][3][i] = (user, timestamp, value)
+                        msg[3][i] = (user, timestamp, value)
                         return True
                     else:
                         return False
 
-        self.messages[messageid][3].append((user, timestamp, value))
+        msg[3].append((user, timestamp, value))
         return True
 
     def unlikeMessage(self, user, messageid, timestamp):
@@ -164,6 +157,11 @@ class Chatroom:
             if value == True:
                 sum += 1
         return sum
+    
+    def getMessageByID(self, id):
+        for message in self.messages:
+            if message[0] == id:
+                return message
 
 class Server():
     """
@@ -208,6 +206,7 @@ class Server():
             print("Recovered from crash, vector_stamp:", self.vector_stamp)
 
     def serverDataGet(self, otherServerIndex):
+        global LOCK
         # get all unknown information from another server
         if otherServerIndex != self.index:
             address, port = SERVER_ADDRESSES[otherServerIndex].split(":", 1)
@@ -215,9 +214,12 @@ class Server():
 
             newMessages = conn.root.exposed_getServerData(self.vector_stamp)
             
-            for message in newMessages:
-                self.processCmdString(message)
-            conn.close()            
+            with LOCK:
+                for message in newMessages:
+                    self.processCmdString(message)
+
+            conn.close() 
+                       
 
     def serverDataGive(self, otherVector):
         # give all info to server that occurred after otherVector
@@ -250,7 +252,8 @@ class Server():
 
             
     def processCmdString(self, cmd, fromOwnLog = False, depth = 0):
-        print("processing cmd", depth)
+        if "processing_cmd" in DEBUG_MESSAGES:
+            print("processing cmd", cmd)
         # run an RPC that was stored to a string
         receivingServer, event_stamp, func, args, kwargs = cmd.replace("\n", "").split("|")
 
@@ -262,10 +265,13 @@ class Server():
             func = getattr(self, func)
             func(*args, **kwargs, receivingServer = receivingServer, fromOwnLog = fromOwnLog)
 
+            if "processing_cmd" in DEBUG_MESSAGES:
+                print("called:", func.__name__)
+                print(F"attemping to call {len(self.messagesToProcess[int(receivingServer)])} waiting functions")
+
             messagesToStillProcess = []
             messagesToProcess = self.messagesToProcess
             for message in messagesToProcess[int(receivingServer)]:
-                
                 # try and run other commands waiting to be processed
                 self.messagesToProcess[int(receivingServer)].remove(message)
                 if not self.processCmdString(message, depth = depth+1):
@@ -276,6 +282,8 @@ class Server():
             return True
 
         else:
+            if "processing_cmd" in DEBUG_MESSAGES:
+                print("not ready to call yet, appending to list")
             self.messagesToProcess[int(receivingServer)].append(cmd)
             return False
 
@@ -337,10 +345,10 @@ class Server():
         return [room.name for room in self.chatrooms]
 
     @write_function
-    def newMessage(self, user, roomName, message, timeStamp):
+    def newMessage(self, user, roomName, message, timeStamp, messageid):
         room = self.getRoom(roomName)
         if room and user in room.participants:
-            room.newMessage(user, message, timeStamp)
+            room.newMessage(user, message, timeStamp, messageid)
             return True
         else:
             return False
@@ -448,7 +456,7 @@ class Connection(rpc.Service):
         with LOCK:
             if "deadlock_test" in DEBUG_MESSAGES:
                 print("lock acquired by newMessage")
-            val = SERVER.newMessage(*args, **kwargs)
+            val = SERVER.newMessage(*args, messageid=F"{SERVER.index}_{SERVER.vector_stamp[SERVER.index]}", **kwargs)
 
         if "deadlock_test" in DEBUG_MESSAGES:
             print("newMessage released lock")
