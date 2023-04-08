@@ -36,15 +36,13 @@ class Client():
         self.receive_thread = Thread(target=self.update_loop, daemon=True, args=[restart]) # infinite loop to update screen
         self.receive_thread.start()
 
-        # self.input_thread = Thread(target=self.input_loop) # infinite loop to receive user input
-        # self.input_thread.start()
-
 
     @with_lock
     def connect(self, arg):
         if len(arg) == 0 or arg == None:
             print("cannot connect to 'None'")
             return False
+        
         self.disconnect()
     
         if ":" in arg:
@@ -56,11 +54,11 @@ class Client():
         self.serverid = str(arg)
         os.system('clear')
         print(F"connecting to {self.serverid}")
-        os.system('clear')
-        print(F"SERVER: {self.serverid}")
+    
         try:
             _ = self.get_available_rooms()
-            print("connected")
+            os.system('clear')
+            print(F"SERVER: {self.serverid}")
         except Exception as e:
             print(F"error connecting: {e}")
 
@@ -72,20 +70,23 @@ class Client():
         self.room = None
         #os.system('clear')
         
-    @with_lock
     def set_name(self, name):
-        if self.room == None:
-            self.name = name
-        else:
-            self.conn.root.exposed_leave(self.name, self.room, datetime.now())
-            self.name = name
+        if len(name) < 1:
+            print("invalid name")
+            return
+
+        self.leave()
+        os.system('clear')
+        print(F"SERVER: {self.serverid}")
+        self.name = name
 
     @with_lock
     def join_room(self, room):
         if self.name == None:
             print("You must select a name first")
             return False
-        if self.conn.root.exposed_join(self.name, room, datetime.now()):
+        
+        if self.conn and self.conn.root.exposed_join(self.name, room, datetime.now()):
             self.room = room
             return True
         else:
@@ -131,6 +132,12 @@ class Client():
             messageid = self.displayedMessages[int(index) - 1][0]
             self.conn.root.exposed_unlike(self.name, self.room, messageid, datetime.now())
 
+    @with_lock
+    def reachableServers(self):
+        result = self.conn.root.exposed_reachableServers()
+        for i in range(len(result)):
+            print(F"server {i+1} reachable: {result[i]}")
+
     def input_loop(self):
         sleep(.1)
         while True:
@@ -172,6 +179,8 @@ class Client():
                     if cmd[0] == "p": #print past messages
                         self.fetchAll = True
                         self.lastContent = None
+                    elif cmd[0] == "v": #quit
+                        self.reachableServers()
                     elif cmd[0] == "q": #quit
                         self.disconnect()
                         sys.exit()
@@ -185,8 +194,9 @@ class Client():
         rate = 3
         os.system('clear')
         if restart:
-            print("client disconnected, please reconnect")
-        print("Chat program started...")
+            print("client disconnected, please reconnect and reselect name")
+        else:    
+            print("Chat program started...")
         print("connect to server using 'c <address>:<port>'")
         print("suggested: c <1-5>")
         while True:
@@ -213,9 +223,9 @@ class Client():
                     print(F"Group: {self.room} \nParticipants:{newChatters}")
                     for id, sender, msg, likes in newContent:
                         if likes != 0:
-                            print(F"[{id}] {count}. {sender}: {msg}\t({likes} Likes)")
+                            print(F"{count}. {sender}: {msg}\t({likes} Likes)")
                         else:
-                            print(F"[{id}] {count}. {sender}: {msg}")
+                            print(F"{count}. {sender}: {msg}")
                         count += 1
 
                     self.lastContent = newContent[-10:]
