@@ -32,6 +32,8 @@ class Client():
         self.fetchAll = False
         self.conn = None
         self.serverid = None
+        self.terminateLock = Lock()
+        self.terminated = False
 
         self.receive_thread = Thread(target=self.update_loop, daemon=True, args=[restart]) # infinite loop to update screen
         self.receive_thread.start()
@@ -141,6 +143,9 @@ class Client():
     def input_loop(self):
         sleep(.1)
         while True:
+            with self.terminateLock:
+                if self.terminated:
+                    raise EOFError
             try:
                 raw = input("")
                 cmd = raw.split(" ", 1)
@@ -199,40 +204,47 @@ class Client():
             print("Chat program started...")
         print("connect to server using 'c <address>:<port>'")
         print("suggested: c <1-5>")
-        while True:
-            sleepTime = 1
-            if not self.conn or not self.room:
-                sleep(sleepTime/rate)
-                continue
-            
-            with LOCK:
-                newContent = self.get_messages()
-
-                if newContent == None: newContent = []
-
-                newChatters = self.get_chatters(self.room)
-
-                if newContent == self.lastContent and str(newChatters) == str(self.lastChatters):
-                    sleepTime = 0.5
+        try:
+            while True:
+                sleepTime = 1
+                if not self.conn or not self.room:
+                    sleep(sleepTime/rate)
+                    continue
                 
-                else:
-                    # if there are changes...
-                    os.system('clear')
-                    count = 1
-                    print(F"SERVER: {self.serverid}")
-                    print(F"Group: {self.room} \nParticipants:{newChatters}")
-                    for id, sender, msg, likes in newContent:
-                        if likes != 0:
-                            print(F"{count}. {sender}: {msg}\t({likes} Likes)")
-                        else:
-                            print(F"{count}. {sender}: {msg}")
-                        count += 1
+                with LOCK:
 
-                    self.lastContent = newContent[-10:]
-                    self.displayedMessages = newContent
-                    self.lastChatters = str(newChatters)
+                    newContent = self.get_messages()
 
-            sleep(sleepTime/rate)
+                    if newContent == None: newContent = []
+
+                    newChatters = self.get_chatters(self.room)
+
+
+                    if newContent == self.lastContent and str(newChatters) == str(self.lastChatters):
+                        sleepTime = 0.5
+                    
+                    else:
+                        # if there are changes...
+                        os.system('clear')
+                        count = 1
+                        print(F"SERVER: {self.serverid}")
+                        print(F"Group: {self.room} \nParticipants:{newChatters}")
+                        for id, sender, msg, likes in newContent:
+                            if likes != 0:
+                                print(F"{count}. {sender}: {msg}\t({likes} Likes)")
+                            else:
+                                print(F"{count}. {sender}: {msg}")
+                            count += 1
+
+                        self.lastContent = newContent[-10:]
+                        self.displayedMessages = newContent
+                        self.lastChatters = str(newChatters)
+
+                sleep(sleepTime/rate)
+        except EOFError:
+            print("Error connecting to server pleace connect to another server")
+            with self.terminateLock:
+                self.terminated = True
             
             
         
@@ -258,8 +270,8 @@ if __name__ == '__main__':
         try:
             client = Client(restart)
             client.input_loop()
-        except EOFError:
+        except EOFError as e:
             restart = True
-            print("client disconnected, please reconnect")
+            print(F"client disconnected with error {e}, please reconnect")
 
         

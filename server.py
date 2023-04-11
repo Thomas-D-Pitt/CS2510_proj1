@@ -4,6 +4,7 @@ from threading import Thread, Lock
 from time import sleep, time
 from rpyc.utils.server import ThreadedServer
 import datetime
+import pickle
 
 DEBUG_MESSAGES = []
 
@@ -169,6 +170,9 @@ class Server():
         self.chatrooms = []
         self.messagesToProcess = {}
         self.vector_stamp = [0 for _ in range(len(SERVER_ADDRESSES.keys()))]
+        self.clients_on_other_servers = [[] for _ in range(len(SERVER_ADDRESSES.keys()))]
+        self.hidden_clients = [[] for _ in range(len(SERVER_ADDRESSES.keys()))]
+        self.my_clients = []
 
         for key in SERVER_ADDRESSES.keys():
             self.messagesToProcess[key] = []
@@ -186,15 +190,39 @@ class Server():
         
 
     def recoverFromCrash(self):
-        # rerun all commands in log file
-        if os.path.isfile(F"server{self.index}_log.txt"):
-            with open(F"server{self.index}_log.txt", "r") as myfile:
-                msgs = myfile.readlines()
+        
+        try:
+            # rerun all commands in log file
+            if os.path.isfile(F"server{self.index}_log.txt"):
+                with open(F"server{self.index}_log.txt", "r") as myfile:
+                    msgs = myfile.readlines()
 
-            for msg in msgs:
-                self.processCmdString(msg, fromOwnLog=True)
+                for msg in msgs:
+                    self.processCmdString(msg, fromOwnLog=True)
+
+            # restore all hidden clients
+            if os.path.isfile(F"Server_{self.index}_hidden_clients.pickle"):
+                with open(F"Server_{self.index}_hidden_clients.pickle", 'rb') as f:
+                    self.hidden_clients = pickle.load(f)
+
+            # run a leave event for all clients that were connected at time of crash so other servers know they are not partitioned/coming back
+            if os.path.isfile(F"Server_{self.index}_clients.pickle"):
+                with LOCK:
+                    with open(F"Server_{self.index}_clients.pickle", 'rb') as f:
+                        
+                        self.my_clients = pickle.load(f)
+                        print("my clients:", self.my_clients)
+                    
+                    for user, roomName in self.my_clients:
+                        self.leave(user, roomName, datetime.datetime.now())
+
+                    self.my_clients = []
 
             print("Recovered from crash, vector_stamp:", self.vector_stamp)
+
+        except Exception as e: 
+            # in the event of a failure allow the server to continue running rather than an immediate crash
+            print(F"Error occured while recovering from crash:", e)
 
     def serverDataGet(self, otherServerIndex):
         global LOCK
@@ -251,7 +279,21 @@ class Server():
             kwargs = json.loads(kwargs)
 
             func = getattr(self, func)
-            func(*args, **kwargs, receivingServer = receivingServer, fromOwnLog = fromOwnLog)
+            
+
+            if func == self.join:
+                _ = kwargs.pop('otherServer', None)
+                self.clients_on_other_servers[int(receivingServer)].append((args[0], args[1]))
+                func(*args, **kwargs, otherServer = int(receivingServer), receivingServer = receivingServer, fromOwnLog = fromOwnLog)
+
+            elif func == self.leave:
+                _ = kwargs.pop('otherServer', None)
+                if (args[0], args[1]) in self.clients_on_other_servers[int(receivingServer)]:
+                    self.clients_on_other_servers[int(receivingServer)].remove((args[0], args[1]))
+                func(*args, **kwargs, otherServer = int(receivingServer), receivingServer = receivingServer, fromOwnLog = fromOwnLog)
+
+            else:
+                func(*args, **kwargs, receivingServer = receivingServer, fromOwnLog = fromOwnLog)
 
             messagesToStillProcess = []
             messagesToProcess = self.messagesToProcess
@@ -275,8 +317,30 @@ class Server():
         while True:
             try:
                 self.serverDataGet(key)
+                # re-add all users where were removed due to loss of connection
+                with LOCK:
+                    if len(self.hidden_clients[key]) != 0:
+                        print(f"adding clients from key {key}:", list(set(self.hidden_clients[key])))
+                        for user, roomName in list(set(self.hidden_clients[int(key)])):
+                            room = self.getRoom(roomName)
+                            room.add_chatter(user)
+                            
+                        self.hidden_clients[key] = []
+                        with open(F"Server_{self.index}_hidden_clients.pickle", 'wb') as f:
+                            pickle.dump(self.hidden_clients, f)
+
             except Exception as e:
                 print(F"Error in anti-entropy on {key}: {e}")
+                # remove users who are connected to unreachable servers, store in a list to re-add if server reconnects
+                with LOCK:
+                    for user, roomName in self.clients_on_other_servers[int(key)]:
+                        self.hidden_clients[int(key)].append((user, roomName))
+                        self.hidden_clients[int(key)] = list(set(self.hidden_clients[int(key)])) # remove duplicates
+                        with open(F"Server_{self.index}_hidden_clients.pickle", 'wb') as f: # save to disk in case of crash
+                            pickle.dump(self.hidden_clients, f)
+                        room = self.getRoom(roomName)
+                        room.remove_chatter(user)
+
 
             sleep(1)
 
@@ -290,10 +354,18 @@ class Server():
         return None
 
     @write_function
-    def join(self, user, roomName, timeStamp):
+    def join(self, user, roomName, timeStamp, otherServer = None):
         # adds user to chatroom, or creates chatroom if it does not exist 
+        
+
         if user == None:
             return False
+        
+        if otherServer == None or otherServer == self.index:
+            self.my_clients.append((user, roomName)) # keeps track of clients on disk in case of server crash
+            print("my clients after join:", self.my_clients)
+            with open(F"Server_{self.index}_clients.pickle", 'wb') as f:
+                pickle.dump(self.my_clients, f)
 
         room = self.getRoom(roomName)
         if room:
@@ -301,16 +373,28 @@ class Server():
         
         newRoom = Chatroom(roomName)
         self.chatrooms.append(newRoom)
+        
         return newRoom.add_chatter(user)
 
     @write_function
-    def leave(self, user, roomName, timeStamp):
+    def leave(self, user, roomName, timeStamp, otherServer = False):
         if user == None:
             return False
+        
+        for key in SERVER_ADDRESSES.keys(): # if leaving user is in hidden_users list remove them from the list
+            if (user, roomName) in self.hidden_clients[int(key)]:
+                self.hidden_clients[int(key)].remove((user, roomName))
+                with open(F"Server_{self.index}_hidden_clients.pickle", 'wb') as f:
+                    pickle.dump(self.hidden_clients, f)
 
         room = self.getRoom(roomName)
         if room :
-                return room.remove_chatter(user)
+            if otherServer == None or otherServer == self.index:
+                self.my_clients.remove((user, roomName)) # keeps track of clients on disk in case of server crash
+                with open(F"Server_{self.index}_clients.pickle", 'wb') as f:
+                    pickle.dump(self.my_clients, f)
+
+            return room.remove_chatter(user)
 
         return False
 
@@ -363,7 +447,7 @@ class Server():
     @write_function
     def newMessage(self, user, roomName, message, timeStamp, messageid):
         room = self.getRoom(roomName)
-        if room and user in room.participants:
+        if room and (user in room.participants or self.isHiddenUser(user, roomName)):
             room.newMessage(user, message, timeStamp, messageid)
             return True
         else:
@@ -386,7 +470,7 @@ class Server():
     @write_function
     def likeMessage(self, user, roomName, messageid, timeStamp):
         room = self.getRoom(roomName)
-        if room and user in room.participants:
+        if room and (user in room.participants or self.isHiddenUser(user, roomName)):
             return room.likeMessage(user, messageid, timeStamp)
         else:
             return False
@@ -394,7 +478,7 @@ class Server():
     @write_function
     def unlikeMessage(self, user, roomName, messageid, timeStamp):
         room = self.getRoom(roomName)
-        if room and user in room.participants:
+        if room and (user in room.participants or self.isHiddenUser(user, roomName)):
             return room.unlikeMessage(user, messageid, timeStamp)
         else:
             return False
@@ -415,6 +499,15 @@ class Server():
                     print(F"Room {count}: {room.name}, {len(room.participants)} active users")
                     count += 1
             sleep(1/rate)
+
+    def isHiddenUser(self, user, roomName):
+        # is the user in roomName in the hidden_users list
+        for srv in self.hidden_clients:
+            for tuser, troomName in srv:
+                if user == tuser and roomName == troomName:
+                    return True
+            
+        return False
 
 class Connection(rpc.Service):
     """
