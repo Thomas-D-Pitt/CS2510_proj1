@@ -23,7 +23,7 @@ def with_lock(func):
 
 class Client():
     
-    def __init__(self, restart = False):
+    def __init__(self, restart = False, id = 0):
         self.name = None
         self.room = None
         self.lastContent = None
@@ -34,6 +34,9 @@ class Client():
         self.serverid = None
         self.terminateLock = Lock()
         self.terminated = False
+        self.id = id
+
+        self.failedCmds = 0
 
         self.receive_thread = Thread(target=self.update_loop, daemon=True, args=[restart]) # infinite loop to update screen
         self.receive_thread.start()
@@ -105,7 +108,7 @@ class Client():
 
     @with_lock
     def send_message(self, message):
-        if self.conn.root.exposed_newMessage(self.name, self.room, message, datetime.now()):
+        if self.conn.root.exposed_newMessage(self.name, self.room, str(message), datetime.now()):
             return True
         else:
             print("Error sending message")
@@ -151,57 +154,33 @@ class Client():
 
     def input_loop(self):
         sleep(.1)
+        iter = 0
+        try:
+            self.connect(str(int(self.id) % 5 + 1))
+        except OSError as e:
+            print(F"Error while connecting to server: {e}")
+        self.set_name(F"client{self.id}")
+        print(F"Username set to: client{self.id}")
+        while not self.join_room("t"):
+            pass
+        print(F"joined t")
         while True:
             with self.terminateLock:
                 if self.terminated:
                     raise EOFError
             try:
-                raw = input("")
-                cmd = raw.split(" ", 1)
-                if len(cmd) == 2: # commands with arguments
+                start = datetime.now()
+                if self.send_message(iter):
+                    iter += 1
 
-                    if cmd[0] == "a": #append message
-                        self.send_message(cmd[1])
-
-                    elif cmd[0] == "u": #set username
-                        self.leave()
-
-                        self.set_name(cmd[1])
-                        print(F"Username set to {cmd[1]}")
-
-                    elif cmd[0] == "j": #join chatroom
-                        self.leave()
-
-                        if self.join_room(cmd[1]):
-                            print(F"joined {cmd[1]}")
-
-                    elif cmd[0] == "l": #like message
-                        self.like(cmd[1])
-
-                    elif cmd[0] == "r": #remove message like
-                        self.unlike(cmd[1])
-
-                    elif cmd[0] == "c": # connect to server
-                        try:
-                            self.connect(cmd[1])
-                        except OSError as e:
-                            print(F"Error while connecting to server: {e}")
-
-                    else:
-                        print(F"Unknown command: {cmd[0]}")
-                else: # commands with no arguments
-                    if cmd[0] == "p": #print past messages
-                        self.fetchAll = True
-                        self.lastContent = None
-                    elif cmd[0] == "v": #quit
-                        self.reachableServers()
-                    elif cmd[0] == "q": #quit
-                        self.disconnect()
-                        sys.exit()
-                    else:
-                        print(F"Invalid Command")
+                    with open(F"client{self.id}_log.txt", "a") as myfile:
+                        myfile.write(F"{start}, {datetime.now()}\n")
+                else:
+                    self.failedCmds += 1
+                sleep(0.1)
             except FileNotFoundError as e:
                 print(F'Exception "{e}" raised while processing "{raw}"')
+                break
 
     def update_loop(self, restart = False):
         global LOCK
@@ -236,7 +215,7 @@ class Client():
                         # if there are changes...
                         os.system('clear')
                         count = 1
-                        print(F"SERVER: {self.serverid}")
+                        print(F"SERVER: {self.serverid}, failedCmds: {self.failedCmds}")
                         print(F"Group: {self.room} \nParticipants:{newChatters}")
                         for id, sender, msg, likes in newContent:
                             if likes != 0:
@@ -262,12 +241,13 @@ class Client():
 def get_args(argv):
 
     parser = argparse.ArgumentParser(description="chat client")
-    parser.add_argument('-p', '--port', required=False, default=12000, type=int)
-    parser.add_argument('-a', '--address', required=False, default="localhost", type=str)
+    parser.add_argument('-i', '--id', required=True, type=int)
+    #parser.add_argument('-p', '--port', required=False, default=12000, type=int)
+    #parser.add_argument('-a', '--address', required=False, default="localhost", type=str)
     return parser.parse_args()
 
 if __name__ == '__main__':
-    #args = get_args(sys.argv[1:])
+    args = get_args(sys.argv[1:])
     global LOCK
     LOCK = Lock()
     
@@ -276,12 +256,12 @@ if __name__ == '__main__':
 
     # start client after connecting to server
     restart = False
-    while True:
-        try:
-            client = Client(restart)
-            client.input_loop()
-        except EOFError as e:
-            restart = True
-            print(F"client disconnected with error {e}, please reconnect")
+
+    try:
+        client = Client(restart, args.id)
+        client.input_loop()
+    except EOFError as e:
+        restart = True
+        print(F"client disconnected with error {e}, please reconnect")
 
         

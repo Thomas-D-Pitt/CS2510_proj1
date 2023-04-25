@@ -16,6 +16,32 @@ SERVER_ADDRESSES = {
     4 : "172.30.100.105:12000"
 }
 
+TIMEOUT = 1
+
+
+
+class ResultCode():
+    RESULT_CODE = {
+        -1 : "unknown error",
+        0 : "all good",
+        1 : "requesting server is not leader",
+        2 : "request number is incorrect",
+        3 : "another request with the same number has already been proposed",
+        4 : "server connection issue",
+        5 : "no response"
+        # 100 and up reserved
+    }
+
+    def __init__(self, value):
+        for key in SERVER_ADDRESSES.keys():
+            self.RESULT_CODE[100 + key] = F"current leader is server: {key}"
+
+        self.value = value
+    
+    def __repr__(self) -> str:
+        return F"{self.value}:{self.RESULT_CODE[self.value]}"
+
+
 ### Decorator function ###
 def write_function(func):
     # Handles all of the additional code that should be run for each write to the server
@@ -26,33 +52,51 @@ def write_function(func):
 
         receivingServer = int(kwargs.pop('receivingServer', self.index))
         fromOwnLog = kwargs.pop('fromOwnLog', False)
+        decided = kwargs.pop('decided', False)
+
+        if not decided and receivingServer == self.index:
+            cmdString = F"{receivingServer}|{self.vector_stamp[receivingServer] + 1}|{func.__name__}|{args}|{json.dumps(kwargs)}"
+            print(F"Proposing: {cmdString}")
+            returnVal = self.proposeCmd(cmdString, int(receivingServer))
+
+            if type(returnVal) == ResultCode:
+                if returnVal.value >= 100:
+                    if self.adjustLeaderToMajority():
+                        returnVal = self.proposeCmd(cmdString, int(receivingServer), secondPass=True)
+
+            if type(returnVal) == ResultCode:
+                return None
+            return returnVal
         
-        self.vector_stamp[receivingServer] += 1
-        if not fromOwnLog: # save command to disk
+        elif decided:
+            self.vector_stamp[receivingServer] += 1
+            if not fromOwnLog: # save command to disk
+                event_stamp = self.vector_stamp[receivingServer]
+                cmdString = F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}"
+                with open(F"server{self.index}_log.txt", "a") as myfile:
+                    myfile.write(cmdString + '\n')
 
-            event_stamp = self.vector_stamp[receivingServer]
-            with open(F"server{self.index}_log.txt", "a") as myfile:
-                cmdString = F"{receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}\n"
-                myfile.write(cmdString)
+                print(F"Write function Called: {receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}")
 
-            print(F"Write function Called: {receivingServer}|{event_stamp}|{func.__name__}|{args}|{json.dumps(kwargs)}")
+                if receivingServer == self.index : # share cmd to all other servers
+                    t = Thread(target = self.serverShareCmd, args = [cmdString], daemon=True)
+                    t.start()
 
-            if receivingServer == self.index: # share cmd to all other servers
-                t = Thread(target = self.serverShareCmd, args = [cmdString], daemon=True)
-                t.start()
-
-        return func(self, *args, **kwargs)
+            return func(self, *args, **kwargs)
+        
+        else:
+            raise Exception("invalid write function call")
 
     return inner
 
-
-class Chatroom:
+class Chatroom():
     
     def __init__(self, name):
         self.participants = []
         self.participantHeartbeats = {}
         self.messages = []
         self.name = name
+        
 
         purge_thread = Thread(target=self.purge, daemon=True) 
         purge_thread.start()
@@ -76,7 +120,8 @@ class Chatroom:
     def remove_chatter(self, username):
         self.participantHeartbeats[username] = None
         if username in self.participants:
-            return self.participants.remove(username)
+            self.participants.remove(username)
+            return True
         return False
 
     def newMessage(self, user, message, timestamp, messageid):
@@ -173,24 +218,28 @@ class Server():
         self.clients_on_other_servers = [[] for _ in range(len(SERVER_ADDRESSES.keys()))]
         self.hidden_clients = [[] for _ in range(len(SERVER_ADDRESSES.keys()))]
         self.my_clients = []
+        self.current_leader = 0
+        self.pendingProposals = {}
+        self.pendingNewLeader = None
+        self.proposalLock = Lock()
 
         for key in SERVER_ADDRESSES.keys():
             self.messagesToProcess[key] = []
 
         if os.path.isfile(F"server{self.index}_log.txt"):
-            self.recoverFromCrash()
+            t = Thread(target=self.recoverFromCrash)
+            t.start()
+            
 
         receive_thread = Thread(target=self.update_loop, daemon=True) 
         receive_thread.start()
-
-        for key in SERVER_ADDRESSES.keys():
-            # start a thread for each other server that will exchange messages
-            entropy_thread = Thread(target=self.anti_entropy, daemon=True, args=[key]) 
-            entropy_thread.start()
         
 
     def recoverFromCrash(self):
+        sleep(0.1)
         
+        self.adjustLeaderToMajority()
+
         try:
             # rerun all commands in log file
             if os.path.isfile(F"server{self.index}_log.txt"):
@@ -198,7 +247,13 @@ class Server():
                     msgs = myfile.readlines()
 
                 for msg in msgs:
-                    self.processCmdString(msg, fromOwnLog=True)
+                    self.processCmdString(msg.replace('\n', ''), fromOwnLog=True)
+                    
+
+            
+            self.serverDataGet(self.current_leader)
+
+            
 
             # restore all hidden clients
             if os.path.isfile(F"Server_{self.index}_hidden_clients.pickle"):
@@ -218,24 +273,41 @@ class Server():
 
                     self.my_clients = []
 
+            sleep(1)
+            print("cahtroom participants...")
+            for cr in self.chatrooms:
+                print(cr.participants)
+
             print("Recovered from crash, vector_stamp:", self.vector_stamp)
 
         except Exception as e: 
             # in the event of a failure allow the server to continue running rather than an immediate crash
             print(F"Error occured while recovering from crash:", e)
 
-    def serverDataGet(self, otherServerIndex):
+    def serverDataGet(self, otherServerIndex, requireLock = True):
         global LOCK
         # get all unknown information from another server
         if otherServerIndex != self.index:
             address, port = SERVER_ADDRESSES[otherServerIndex].split(":", 1)
             conn = rpc.connect(address, port)
 
-            newMessages = conn.root.exposed_getServerData(self.vector_stamp)
-            
-            with LOCK:
+            newMessages, otherPendingProposals = conn.root.exposed_getServerData(self.vector_stamp)
+            otherPendingProposals = dict(json.loads(otherPendingProposals))
+            for key, value in otherPendingProposals.items():
+                otherPendingProposals[key] = [datetime.datetime.strptime(str(otherPendingProposals[key][0]), '%Y-%m-%d %H:%M:%S.%f')] + otherPendingProposals[key][1:]
+
+            if requireLock:
+                with LOCK:
+                    for message in newMessages:
+                        self.processCmdString(message)
+            else:
                 for message in newMessages:
-                    self.processCmdString(message)
+                        self.processCmdString(message)
+
+            for key, value in otherPendingProposals.items():
+                if key not in self.pendingProposals:
+                    self.pendingProposals[key] = value
+
 
             conn.close() 
                        
@@ -250,50 +322,339 @@ class Server():
                 receivingServer, event_stamp, func, args, kwargs = msg.replace("\n", "").split("|")
                 if otherVector[int(receivingServer)] < int(event_stamp):
                     filtered_msgs.append(msg)
-        return filtered_msgs
 
-    def serverShareCmd(self, cmd):
+        pendingProposals = self.pendingProposals
+        for key,value in pendingProposals.items(): # prepare data from sending
+            pendingProposals[key][0] = str(pendingProposals[key][0])
+
+        returnVal = (filtered_msgs, json.dumps(pendingProposals))
+
+        for key,value in pendingProposals.items(): # return data to previous state
+            pendingProposals[key][0] = datetime.datetime.strptime(str(pendingProposals[key][0]), '%Y-%m-%d %H:%M:%S.%f')
+
+        return returnVal
+
+    def serverShareCmd(self, cmd, proposalID = None, existingConn = None, connServer = None):
         for key, value in SERVER_ADDRESSES.items():
-            t = Thread(target = self._serverShareCmdHelper, args = [key, value, cmd])
+            t = Thread(target = self._serverShareCmdHelper, args = [key, value, cmd, proposalID, existingConn, connServer])
             t.start()
 
-    def _serverShareCmdHelper(self, key, value, cmd):
+    def _serverShareCmdHelper(self, key, value, cmd, proposalID = None, existingConn = None, connServer = None):
         try:
             if key == self.index: return
-
-            address, port = value.split(":", 1)
-            conn = rpc.connect(address, port)
-            conn.root.exposed_processCmdString(cmd)
-            conn.close()
+            if connServer and existingConn and existingConn == key:
+                print("_serverShareCmdHelper existingConn", connServer)
+                existingConn.root.exposed_processCmdString(cmd, proposalID = proposalID, withLock = False)
+            else:
+                address, port = value.split(":", 1)
+                conn = rpc.connect(address, port)
+                conn.root.exposed_processCmdString(cmd, proposalID = proposalID)
+                conn.close()
         except Exception as e:
             print(F"Error in serverShareCmd on {key}: {e}")
-      
-    def processCmdString(self, cmd, fromOwnLog = False, depth = 0):
 
+    def proposeCmd(self, cmd, receivingServer, conn = None, secondPass = False):
+        proposeAgain = False
+        with self.proposalLock:
+
+            if secondPass: # the requesting server has asked all other servers who the majority leader is and is asking again
+                self.adjustLeaderToMajority()
+
+            if self.current_leader == self.index: # share to other servers
+                print(F"Sharing propose : {cmd}")
+                resultsLock = Lock()
+                results = [-1 for key in SERVER_ADDRESSES.keys()]
+                for key, value in SERVER_ADDRESSES.items():
+                    t = Thread(target = self.proposeCmdShare, args = [key, sum(self.vector_stamp) + 1, cmd, self.index, results, resultsLock, conn, receivingServer])
+                    t.start()
+
+                for i in range(10):
+                    accepted_servers = 0
+                    failed_servers = 0
+                    notLeaderresults = 0
+                    with resultsLock:
+                        for result in results:
+                            if type(result) == ResultCode and result.value == 0:
+                                accepted_servers += 1
+
+                            elif type(result) == ResultCode and result.value == 1: # server is no longer leader
+                                notLeaderresults += 1
+
+                            elif type(result) == ResultCode and result.value > 0:
+                                failed_servers += 1
+
+                        
+                    if accepted_servers > len(SERVER_ADDRESSES.keys()) / 2:
+                        print("proposal passes")
+                        self.serverShareCmd(cmd, proposalID=sum(self.vector_stamp) + 1, existingConn = conn, connServer=receivingServer)
+                        return self.processCmdString(cmd, proposalID=sum(self.vector_stamp) + 1)
+                    
+                    elif failed_servers > len(SERVER_ADDRESSES.keys()) / 2:
+                        print(F"propose failed: {results}")
+                        return None
+                    
+                    elif notLeaderresults > len(SERVER_ADDRESSES.keys()) / 2:
+                        print(F"propose failed: {results}")
+                        proposeAgain = True # adjust to new leader and propose
+
+                    sleep(TIMEOUT / 10)
+                print(F"propose timed out, results: {results}")
+                return None
+                
+
+            elif receivingServer == self.index: # have leader share with other servers
+                
+                try:
+                    print(F"propose to leader {self.current_leader}: {cmd}".replace('\n', ''))
+                    resultsLock = Lock()
+                    results = [] # easiest way to pass variable by reference rather than value
+                    returnVal = None
+                    t = Thread(target = self._proposeCmdHelper, args = [cmd, receivingServer, results, resultsLock], kwargs={"secondPass":secondPass})
+                    t.start()
+                    for i in range(10):
+                        with resultsLock:
+                            if len(results) > 0:
+                                returnVal = results[0]
+                                break
+                        sleep(TIMEOUT/10)
+                    
+                    
+
+                    if len(results) == 0:
+                        raise Exception("no response within timeout")
+
+                    return returnVal
+                except Exception as e:
+                    print(F"failed to propose to leader {self.current_leader}: {e}, holding election")
+                    if self.becomeLeader():
+                        proposeAgain = True
+                        
+
+
+            
+            else:
+                return ResultCode(100 + self.current_leader)
+            
+        if proposeAgain:
+            self.proposeCmd(cmd, receivingServer, conn, secondPass=True)
+        
+    def _proposeCmdHelper(self, cmd, receivingServer, results, resultsLock, secondPass = False):
+        address, port = SERVER_ADDRESSES[self.current_leader].split(":", 1)
+        conn = rpc.connect(address, port, service=Connection)
+
+        returnVal = -1
+        try:
+            returnVal = conn.root.exposed_proposeCmd(cmd, receivingServer, secondPass=secondPass)
+
+        finally:
+            with resultsLock:
+                if returnVal != -1:
+                    results.append(returnVal)
+            conn.close() 
+
+        return returnVal
+        
+    def proposeCmdShare(self, targetServer, requestNum, cmd, requestingServer, results, resultsLock, ExistingConn, initiatingServer):
+        if targetServer != self.index:
+            address, port = SERVER_ADDRESSES[targetServer].split(":", 1)
+            print(F"address, port: {address, port}")
+            try:
+                if targetServer != initiatingServer:
+                    conn = rpc.connect(address, port)
+                    returnVal = conn.root.exposed_recieiveProposal(requestNum, cmd, requestingServer)
+                    returnVal = ResultCode(returnVal) # store value in local copy so that connection can be closed
+                    conn.close()
+                else:
+                    print("exisiting conn:", type(ExistingConn))
+                    returnVal = ExistingConn.root.exposed_recieiveProposal(requestNum, cmd, requestingServer, withLock=False)
+                    returnVal = ResultCode(returnVal)
+                    print("exisiting conn done")
+            except Exception as e:
+                print("proposeCmdShare error:", e)
+                returnVal = ResultCode(4)
+            
+
+        else:
+            returnVal = self.recieiveProposal(requestNum, cmd, requestingServer)
+            returnVal = ResultCode(returnVal)
+
+        with resultsLock:
+            results[targetServer] = returnVal
+
+        return returnVal
+
+    def recieiveProposal(self, requestNum, cmd, requestingServer):
+        # returns a ResultCode enum
+
+        print(F"recived proposal: {cmd}")
+        if requestNum > sum(self.vector_stamp) + 1:
+            self.serverDataGet(requestingServer, requireLock=False)
+        
+        if requestingServer != self.current_leader:
+            returnVal = 1 #ResultCode(1)
+        
+        elif requestNum <= sum(self.vector_stamp):
+            returnVal = 2 #ResultCode(2)
+
+        elif requestNum in self.pendingProposals and (datetime.datetime.now() - self.pendingProposals[requestNum][0]).total_seconds() < 1:
+            returnVal = 3 #ResultCode(3)
+
+        else:
+            self.pendingProposals[requestNum] = [datetime.datetime.now(), requestingServer]
+            returnVal = 0 #ResultCode(0)
+
+        return returnVal
+
+    def becomeLeader(self):
+        resultsLock = Lock()
+        results = [0 for key in SERVER_ADDRESSES.keys()]
+        for i in SERVER_ADDRESSES.keys():
+            t = Thread(target = self._becomeLeaderHelperPropose, args = [i, results, resultsLock])
+            t.start()
+        
+        for i in range(20):
+            with resultsLock:
+                if sum(results) > len(SERVER_ADDRESSES.keys()) / 2:
+                    print("election results (pass):", results)
+                    for i in SERVER_ADDRESSES.keys():
+                        t = Thread(target = self._becomeLeaderHelperElect, args = [i])
+                        t.start()
+                    return True
+            sleep(TIMEOUT/10)
+
+        print("election results (fail):", results)
+        return False
+
+    def _becomeLeaderHelperPropose(self, serverIndex, results, resultsLock):
+        address, port = SERVER_ADDRESSES[serverIndex].split(":", 1)
+        try:
+            if serverIndex == self.index:
+                proposalAccepted = self.newLeaderProposal(None, self.index)
+            else:
+                conn = rpc.connect(address, port)
+                proposalAccepted = conn.root.exposed_newLeaderProposal(self.index)
+                conn.close()
+            
+            if proposalAccepted:
+                self.serverDataGet(serverIndex, requireLock = False)
+                with resultsLock:
+                    results[serverIndex] = 1
+                return True
+            else:
+                print("election rejected on server:", serverIndex)
+                raise Exception("Proposal rejected")
+
+        except Exception as e:
+            print(F"proposal failed in server: {serverIndex}, with error: {e}")
+            return False
+        
+    def _becomeLeaderHelperElect(self, serverIndex):
+        address, port = SERVER_ADDRESSES[serverIndex].split(":", 1)
+
+        try:
+            if serverIndex == self.index:
+                self.newLeaderElected(None, self.index)
+            else:
+                conn = rpc.connect(address, port)
+                conn.root.exposed_newLederElected(self.index)
+                conn.close()
+
+        except Exception as e:
+            print(F"elect failed in server: {serverIndex}, with error: {e}")
+            return False
+        
+    def newLeaderProposal(self, conn, newLeaderIndex):
+        print("newLeaderProposal:", newLeaderIndex)
+        now = datetime.datetime.now()
+        if self.pendingNewLeader == None or (now - self.pendingNewLeader[0]).total_seconds() > TIMEOUT or self.pendingNewLeader[1] == newLeaderIndex:
+            self.pendingNewLeader = (now, newLeaderIndex)
+            return True
+        
+        return False
+    
+    def newLeaderElected(self, conn, newLeaderIndex):
+        print("new leader elected:", newLeaderIndex)
+        self.current_leader = newLeaderIndex
+
+    def adjustLeaderToMajority(self):
+        print("adjustLeaderToMajority")
+        returnVal = False
+        resultsLock = Lock()
+        results = [-1 for key in SERVER_ADDRESSES.keys()]
+        for i in SERVER_ADDRESSES.keys():
+            t = Thread(target = self._adjustLeaderToMajorityHelper, args = [i, results, resultsLock])
+            t.start()
+
+        for _ in range(10):
+            with resultsLock:
+                for i in range(len(results)):
+                    sum = 0
+                    for j in range(i, len(results)):
+                        
+                        if results[i] == results[j] and results[i] != -1:
+                            sum += 1
+
+                    if sum > len(results) / 2: # the majority of servers think server:{i} is the leader
+                        self.current_leader = i
+                        print("adjustLeaderToMajority set new leader:", i)
+                        returnVal = True
+                        break
+            if returnVal:
+                break
+            else:
+                sleep(TIMEOUT/10)
+
+        if not returnVal:       
+            print("adjustLeaderToMajority could not determine leader")
+        print("adjustLeaderToMajority completed")
+        return returnVal
+
+    def _adjustLeaderToMajorityHelper(self, serverIndex, results, resultsLock):
+        address, port = SERVER_ADDRESSES[serverIndex].split(":", 1)
+
+        try:
+            conn = rpc.connect(address, port)
+            leader = conn.root.exposed_getLeader()
+            conn.close()
+
+            with resultsLock:
+                results[serverIndex] = leader
+            return leader
+
+        except Exception as e:
+            print(F"getLeader failed in server: {serverIndex}, with error: {e}")
+            return -1
+
+    def processCmdString(self, cmd, fromOwnLog = False, depth = 0, proposalID = None):
+        print("processing cmd string", cmd)
         # run an RPC that was stored to a string
         receivingServer, event_stamp, func, args, kwargs = cmd.replace("\n", "").split("|")
-
         #only run if it is the next command for a given server, otherwise save it for later
         if int(event_stamp) == self.vector_stamp[int(receivingServer)] + 1:
+
+            if proposalID:
+                self.pendingProposals.pop(proposalID)
+
             args = eval(args)
             kwargs = json.loads(kwargs)
+            kwargs['decided'] = True
 
             func = getattr(self, func)
+            
             
 
             if func == self.join:
                 _ = kwargs.pop('otherServer', None)
                 self.clients_on_other_servers[int(receivingServer)].append((args[0], args[1]))
-                func(*args, **kwargs, otherServer = int(receivingServer), receivingServer = receivingServer, fromOwnLog = fromOwnLog)
+                returnVal = func(*args, **kwargs, otherServer = int(receivingServer), receivingServer = receivingServer, fromOwnLog = fromOwnLog)
 
             elif func == self.leave:
                 _ = kwargs.pop('otherServer', None)
                 if (args[0], args[1]) in self.clients_on_other_servers[int(receivingServer)]:
                     self.clients_on_other_servers[int(receivingServer)].remove((args[0], args[1]))
-                func(*args, **kwargs, otherServer = int(receivingServer), receivingServer = receivingServer, fromOwnLog = fromOwnLog)
-
+                returnVal = func(*args, **kwargs, otherServer = int(receivingServer), receivingServer = receivingServer, fromOwnLog = fromOwnLog)
             else:
-                func(*args, **kwargs, receivingServer = receivingServer, fromOwnLog = fromOwnLog)
+                returnVal = func(*args, **kwargs, receivingServer = receivingServer, fromOwnLog = fromOwnLog)
 
             messagesToStillProcess = []
             messagesToProcess = self.messagesToProcess
@@ -305,11 +666,11 @@ class Server():
 
             self.messagesToProcess[int(receivingServer)] = messagesToStillProcess
 
-            return True
+            return returnVal
 
         else:
             self.messagesToProcess[int(receivingServer)].append(cmd)
-            return False
+            return None
 
     def anti_entropy(self, key):
         # get and process data from other servers
@@ -354,7 +715,7 @@ class Server():
         return None
 
     @write_function
-    def join(self, user, roomName, timeStamp, otherServer = None):
+    def join(self, user, roomName, timeStamp = None, otherServer = None):
         # adds user to chatroom, or creates chatroom if it does not exist 
         
 
@@ -363,7 +724,6 @@ class Server():
         
         if otherServer == None or otherServer == self.index:
             self.my_clients.append((user, roomName)) # keeps track of clients on disk in case of server crash
-            print("my clients after join:", self.my_clients)
             with open(F"Server_{self.index}_clients.pickle", 'wb') as f:
                 pickle.dump(self.my_clients, f)
 
@@ -377,7 +737,7 @@ class Server():
         return newRoom.add_chatter(user)
 
     @write_function
-    def leave(self, user, roomName, timeStamp, otherServer = False):
+    def leave(self, user, roomName, timeStamp = None, otherServer = False):
         if user == None:
             return False
         
@@ -390,10 +750,16 @@ class Server():
         room = self.getRoom(roomName)
         if room :
             if otherServer == None or otherServer == self.index:
-                self.my_clients.remove((user, roomName)) # keeps track of clients on disk in case of server crash
+                print(F"REMOVING:", user, roomName)
+                if (user, roomName) in self.my_clients:
+                    self.my_clients.remove((user, roomName)) # keeps track of clients on disk in case of server crash
+                print(F"REMOVING2:", user, roomName)
                 with open(F"Server_{self.index}_clients.pickle", 'wb') as f:
+                    print(F"REMOVING3:", user, roomName)
                     pickle.dump(self.my_clients, f)
-
+            print(F"REMOVING4:", user, roomName)
+            returnVal = room.remove_chatter(user)
+            print(F"REMOVAL:", returnVal)
             return room.remove_chatter(user)
 
         return False
@@ -516,6 +882,7 @@ class Connection(rpc.Service):
     def on_connect(self, conn):
         self.clientName = None
         self.clientRoom = None
+        self.conn = conn
 
     def on_disconnect(self, conn):
         if self.clientName and self.clientRoom:
@@ -523,6 +890,9 @@ class Connection(rpc.Service):
                 SERVER.leave(self.clientName, self.clientRoom, datetime.datetime.now())
             except Exception as e:
                 print(F'attempted to remove {self.clientName} from {self.clientRoom} but failed eith exception: {e}')
+
+    def exposed_getLeader(self):
+        return SERVER.current_leader
 
     def exposed_getMessages(self, *args, **kwargs):
 
@@ -565,7 +935,9 @@ class Connection(rpc.Service):
 
     def exposed_join(self, *args, **kwargs):
 
-        global SERVER, LOCK
+        global SERVER, LOCK, START_TIME
+        if (datetime.datetime.now() - START_TIME).total_seconds() < 3:
+            return -2
         with LOCK:
             success = SERVER.join(*args, **kwargs) 
         if success:
@@ -610,8 +982,16 @@ class Connection(rpc.Service):
     def exposed_getServerInfo(self):
 
         global SERVER, LOCK
-        with LOCK:
-            val = str(SERVER)
+        #with LOCK:
+        val = str(SERVER)
+
+        return val
+    
+    def exposed_proposeCmd(self, *args, **kwargs):
+
+        global SERVER
+
+        val = SERVER.proposeCmd(*args, conn = self.conn, **kwargs)
 
         return val
 
@@ -625,9 +1005,12 @@ class Connection(rpc.Service):
         return val
 
     def exposed_processCmdString(self, *args, **kwargs):
-
+        withLock = kwargs.pop("withLock", True)
         global SERVER
-        with LOCK:
+        if withLock:
+            with LOCK:
+                val = SERVER.processCmdString(*args, **kwargs)
+        else:
             val = SERVER.processCmdString(*args, **kwargs)
 
         return val
@@ -635,6 +1018,29 @@ class Connection(rpc.Service):
     def exposed_reachableServers(self, *args, **kwargs):
         global SERVER
         return SERVER.reachableServers(*args, **kwargs)
+    
+    def exposed_recieiveProposal(self, *args, **kwargs):
+        withLock = kwargs.pop("withLock", True)
+        global SERVER
+        if withLock:
+            with LOCK:
+                val = SERVER.recieiveProposal(*args, **kwargs)
+        else:
+            val = SERVER.recieiveProposal(*args, **kwargs)
+
+        return val
+    
+    def exposed_newLeaderProposal(*args, **kwargs):
+        global SERVER
+        with LOCK:
+            val = SERVER.newLeaderProposal(*args, **kwargs)
+        return val
+    
+    def exposed_newLederElected(*args, **kwargs):
+        global SERVER
+        with LOCK:
+            val = SERVER.newLeaderElected(*args, **kwargs)
+        return val
 
 
 def get_args(argv):
@@ -652,6 +1058,6 @@ if __name__ == '__main__':
     print("Chat Server")
     args = get_args(sys.argv[1:])
     SERVER = Server(args.id)
-
+    START_TIME = datetime.datetime.now()
     connectionHandler = ThreadedServer(Connection, port = args.port, listener_timeout=2)
     connectionHandler.start()
