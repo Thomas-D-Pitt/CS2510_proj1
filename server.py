@@ -229,6 +229,10 @@ class Server():
         if os.path.isfile(F"server{self.index}_log.txt"):
             t = Thread(target=self.recoverFromCrash)
             t.start()
+
+        for key in SERVER_ADDRESSES.keys():
+            t = Thread(target=self.anti_entropy, args=[key])
+            t.start()
             
 
         receive_thread = Thread(target=self.update_loop, daemon=True) 
@@ -566,7 +570,7 @@ class Server():
     def newLeaderProposal(self, conn, newLeaderIndex):
         print("newLeaderProposal:", newLeaderIndex)
         now = datetime.datetime.now()
-        if self.pendingNewLeader == None or (now - self.pendingNewLeader[0]).total_seconds() > TIMEOUT or self.pendingNewLeader[1] == newLeaderIndex:
+        if self.pendingNewLeader == None or (now - self.pendingNewLeader[0]).total_seconds() > TIMEOUT * 2 or self.pendingNewLeader[1] == newLeaderIndex:
             self.pendingNewLeader = (now, newLeaderIndex)
             return True
         
