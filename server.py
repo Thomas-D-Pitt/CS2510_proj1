@@ -362,6 +362,7 @@ class Server():
         with self.proposalLock:
 
             if secondPass: # the requesting server has asked all other servers who the majority leader is and is asking again
+                print("proposing again")
                 self.adjustLeaderToMajority()
 
             if self.current_leader == self.index: # share to other servers
@@ -397,13 +398,20 @@ class Server():
                         print(F"propose failed: {results}")
                         return None
                     
-                    elif notLeaderresults > len(SERVER_ADDRESSES.keys()) / 2:
+                    elif receivingServer == self.index and notLeaderresults > len(SERVER_ADDRESSES.keys()) / 2:
                         print(F"propose failed: {results}")
-                        proposeAgain = True # adjust to new leader and propose
+                        proposeAgain = True if secondPass == False else False # adjust to new leader and propose
+
+                    elif receivingServer != self.index and notLeaderresults > len(SERVER_ADDRESSES.keys()) / 2:
+                        print(F"propose failed: {results}")
+                        return ResultCode(1)
 
                     sleep(TIMEOUT / 10)
                 print(F"propose timed out, results: {results}")
-                return None
+                if receivingServer == self.index:
+                    return None
+                else:
+                    return ResultCode(4)
                 
 
             elif receivingServer == self.index: # have leader share with other servers
@@ -426,12 +434,20 @@ class Server():
 
                     if len(results) == 0:
                         raise Exception("no response within timeout")
+                    
+                    elif type(returnVal) == ResultCode and returnVal.value == 1:
+                        # asking server that is not leader
+                        proposeAgain = True if secondPass == False else False
+
+                    elif type(returnVal) == ResultCode and returnVal.value == 4:
+                        # asking server that is not leader
+                        return None
 
                     return returnVal
                 except Exception as e:
                     print(F"failed to propose to leader {self.current_leader}: {e}, holding election")
                     if self.becomeLeader():
-                        proposeAgain = True
+                        proposeAgain = True if secondPass == False else False
                         
 
 
@@ -440,7 +456,7 @@ class Server():
                 return ResultCode(100 + self.current_leader)
             
         if proposeAgain:
-            self.proposeCmd(cmd, receivingServer, conn, secondPass=True)
+            return self.proposeCmd(cmd, receivingServer, conn, secondPass=True)
         
     def _proposeCmdHelper(self, cmd, receivingServer, results, resultsLock, secondPass = False):
         address, port = SERVER_ADDRESSES[self.current_leader].split(":", 1)

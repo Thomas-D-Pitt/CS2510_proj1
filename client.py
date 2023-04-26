@@ -283,5 +283,7 @@ if __name__ == '__main__':
         except EOFError as e:
             restart = True
             print(F"client disconnected with error {e}, please reconnect")
+            print("---Press Enter to continue---")
+            input()
 
         

@@ -171,10 +171,11 @@ class Client():
             try:
                 start = datetime.now()
                 if self.send_message(iter):
+                    end = datetime.now()
                     iter += 1
 
                     with open(F"client{self.id}_log.txt", "a") as myfile:
-                        myfile.write(F"{start}, {datetime.now()}\n")
+                        myfile.write(F"{start}, {end}\n")
                 else:
                     self.failedCmds += 1
                 sleep(0.1)
