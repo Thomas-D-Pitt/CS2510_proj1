@@ -1,4 +1,4 @@
-# CS 2510: Project 1
+# CS 2510: Final Project
 
 ## Changes to test_p2
 changed run command to use python, and added -itd argument for the cmd_str in init_containers (so that containers show output in log)
